@@ -1,0 +1,74 @@
+{
+  "projectType": "general",
+  "projectName": "Extrator de Tarefas Auvo",
+  "projectDescription": "A Flask web application for analyzing and filtering Auvo task reports from CSV files with keyword-based search and export capabilities.",
+  "theme": "almond",
+  "primaryColor": "#146bc3",
+  "lightColor": "#007bff",
+  "darkColor": "#0056b3",
+  "navigation": {
+    "groups": [
+      {
+        "group": "Getting Started",
+        "pages": [
+          "introduction",
+          "installation",
+          "quickstart"
+        ]
+      },
+      {
+        "group": "User Guide",
+        "pages": [
+          "guide/uploading-files",
+          "guide/configuring-keywords",
+          "guide/viewing-results",
+          "guide/exporting-reports"
+        ]
+      },
+      {
+        "group": "Features",
+        "pages": [
+          "features/filtering",
+          "features/statistics",
+          "features/export-formats",
+          "features/history"
+        ]
+      },
+      {
+        "group": "Technical Reference",
+        "pages": [
+          "reference/file-formats",
+          "reference/configuration",
+          "reference/architecture"
+        ]
+      },
+      {
+        "group": "Support",
+        "pages": [
+          "troubleshooting",
+          "faq"
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "CSV/Excel file upload and processing",
+    "Keyword-based task filtering",
+    "Interactive results table with search",
+    "Statistics dashboard with task metrics",
+    "Export to Excel and PDF formats",
+    "Customizable keyword configuration",
+    "Processing history tracking"
+  ],
+  "publicApiSurface": [
+    "/ - Home page with file upload",
+    "/config - Keyword configuration page",
+    "/historico - Processing history page",
+    "/upload - File upload endpoint (POST)",
+    "/download/excel - Excel export endpoint",
+    "/download/pdf - PDF export endpoint",
+    "processar_arquivo() - CSV/Excel processing function",
+    "gerar_estatisticas() - Statistics generation function",
+    "criar_links() - URL to HTML link converter"
+  ]
+}
