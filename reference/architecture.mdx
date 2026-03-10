@@ -1,0 +1,698 @@
+---
+title: 'Architecture'
+description: 'Flask application structure, routes, helper functions, and file processing flow'
+icon: 'diagram-project'
+---
+
+## Application Overview
+
+Extrator de Tarefas Auvo is a Flask-based web application that processes task reports from the Auvo system, filters them by keywords, and generates downloadable reports.
+
+### Technology Stack
+
+<CardGroup cols={2}>
+  <Card title="Backend Framework" icon="python">
+    **Flask 3.1.2** - Lightweight WSGI web application framework
+  </Card>
+  <Card title="Data Processing" icon="table">
+    **Pandas 2.3.2** - DataFrame manipulation and CSV/Excel I/O
+  </Card>
+  <Card title="PDF Generation" icon="file-pdf">
+    **WeasyPrint 66.0** - HTML to PDF conversion engine
+  </Card>
+  <Card title="Excel Processing" icon="file-excel">
+    **openpyxl 3.1.5** - Excel file reading and writing
+  </Card>
+</CardGroup>
+
+Reference: `requirements.txt:8,14-15,27`
+
+## Application Structure
+
+```
+extrator-tarefas-auvo/
+├── app.py                 # Main application file
+├── requirements.txt       # Python dependencies
+├── .env                   # Environment variables (not in repo)
+├── temp/                  # Temporary file storage (auto-created)
+├── templates/             # Jinja2 HTML templates
+│   ├── index.html        # Home/upload page
+│   ├── config.html       # Keyword configuration
+│   ├── historico.html    # Processing history
+│   └── resultado.html    # Results display
+└── static/               # CSS, JS, images (if any)
+```
+
+## Application Initialization
+
+```python
+from flask import Flask
+import os
+from dotenv import load_dotenv
+
+# Load environment variables from .env
+load_dotenv()
+
+# Initialize Flask application
+app = Flask(__name__)
+app.secret_key = os.getenv('SECRET_KEY')
+
+# Configure temporary file storage
+TEMP_FOLDER = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'temp')
+if not os.path.exists(TEMP_FOLDER):
+    os.makedirs(TEMP_FOLDER)
+```
+
+Reference: `app.py:1-21`
+
+## Core Helper Functions
+
+### criar_links()
+
+Converts URLs to clickable HTML links for display.
+
+```python
+def criar_links(url):
+    """Transforma URLs em links HTML clicáveis"""
+    if isinstance(url, str) and url.startswith('http'):
+        return f'<a href="{url}" target="_blank">{url}</a>'
+    return url
+```
+
+Reference: `app.py:26-30`
+
+<ParamField path="url" type="string">
+  Value from OS Digital column
+</ParamField>
+
+<ResponseField name="return" type="string">
+  HTML anchor tag if URL detected, otherwise original value
+</ResponseField>
+
+### processar_arquivo()
+
+Core file processing function that reads and filters data.
+
+```python
+def processar_arquivo(file, palavras_chave):
+    """Processa o arquivo CSV ou Excel e retorna os dados filtrados"""
+    filename = file.filename.lower()
+    
+    # Read file based on extension
+    if filename.endswith('.csv'):
+        df = pd.read_csv(file, skiprows=5)
+    elif filename.endswith(('.xls', '.xlsx')):
+        df = pd.read_excel(file, skiprows=5, engine='openpyxl')
+    else:
+        raise ValueError("Formato de arquivo não suportado. Use .csv, .xls ou .xlsx")
+
+    # Build regex pattern from keywords
+    regex_busca = '|'.join(palavras_chave)
+    
+    # Filter rows containing keywords in Relato column
+    coluna_descricao = 'Relato'
+    necessidades = df[df[coluna_descricao].astype(str).str.contains(
+        regex_busca, case=False, na=False
+    )].copy()
+    
+    # Return original and filtered DataFrames
+    colunas_resultado = ['Data', 'Cliente', 'Endereco', 'OS Digital', 'Relato']
+    return df, necessidades[colunas_resultado]
+```
+
+Reference: `app.py:32-53`
+
+<ParamField path="file" type="FileStorage">
+  Uploaded file object from Flask request
+</ParamField>
+
+<ParamField path="palavras_chave" type="list[string]">
+  Keywords to search for in Relato column
+</ParamField>
+
+<ResponseField name="df" type="DataFrame">
+  Complete original DataFrame with all rows
+</ResponseField>
+
+<ResponseField name="necessidades" type="DataFrame">
+  Filtered DataFrame containing only matching rows with selected columns
+</ResponseField>
+
+### gerar_estatisticas()
+
+Generates statistics about filtering results.
+
+```python
+def gerar_estatisticas(df_original, df_filtrado, palavras_chave):
+    """Gera estatísticas simples dos dados"""
+    total = len(df_original)
+    filtrados = len(df_filtrado)
+    
+    stats = {
+        'total': total,
+        'filtrados': filtrados,
+        'percentual': round((filtrados/total)*100, 1) if total > 0 else 0,
+        'por_palavra': {}
+    }
+    
+    # Count occurrences per keyword
+    for palavra in palavras_chave:
+        if not df_filtrado.empty:
+            count = int(df_filtrado['Relato'].str.contains(
+                palavra, case=False, na=False
+            ).sum())
+            if count > 0:
+                stats['por_palavra'][palavra] = count
+    
+    return stats
+```
+
+Reference: `app.py:55-73`
+
+<ResponseField name="stats" type="object">
+  Statistics object with total, filtered count, percentage, and per-keyword breakdown
+</ResponseField>
+
+### salvar_historico()
+
+Stores processing history in session.
+
+```python
+def salvar_historico(filename, stats):
+    """Salva o histórico de processamentos na sessão"""
+    hist = session.get('historico', [])
+    hist.insert(0, {
+        'arquivo': filename,
+        'data': datetime.now().strftime('%d/%m/%Y %H:%M'),
+        'encontrados': stats['filtrados'],
+        'total': stats['total']
+    })
+    session['historico'] = hist[:10]  # Keep only last 10 entries
+```
+
+Reference: `app.py:75-84`
+
+### get_dataframe_from_temp_file()
+
+Retrieves processed results from temporary storage.
+
+```python
+def get_dataframe_from_temp_file():
+    """Pega o nome do arquivo da sessão e o lê como um DataFrame."""
+    temp_filename = session.get('temp_filename')
+    if not temp_filename:
+        return None
+    
+    file_path = os.path.join(TEMP_FOLDER, temp_filename)
+    
+    if os.path.exists(file_path):
+        return pd.read_csv(file_path)
+    return None
+```
+
+Reference: `app.py:87-98`
+
+<Warning>
+Returns `None` if temp file is missing or session has expired. Routes must handle this gracefully.
+</Warning>
+
+## Application Routes
+
+### GET / (index)
+
+Home page with file upload form.
+
+```python
+@app.route('/')
+def index():
+    error = request.args.get('error')
+    return render_template('index.html', error=error)
+```
+
+Reference: `app.py:103-106`
+
+<ResponseField name="template" type="string" value="index.html" />
+<ResponseField name="error" type="string" optional>
+  Error message from query parameter (displayed to user)
+</ResponseField>
+
+### GET/POST /config
+
+Keyword configuration interface.
+
+```python
+@app.route('/config', methods=['GET', 'POST'])
+def config():
+    if request.method == 'POST':
+        keywords = request.form.get('keywords', '').split(',')
+        session['custom_keywords'] = [k.strip() for k in keywords if k.strip()]
+        return redirect(url_for('index'))
+    
+    current_keywords = session.get('custom_keywords', DEFAULT_KEYWORDS)
+    return render_template('config.html', keywords=', '.join(current_keywords))
+```
+
+Reference: `app.py:108-116`
+
+**POST Parameters:**
+<ParamField body="keywords" type="string">
+  Comma-separated list of keywords
+</ParamField>
+
+**GET Response:**
+<ResponseField name="template" type="string" value="config.html" />
+<ResponseField name="keywords" type="string">
+  Current keywords joined by commas
+</ResponseField>
+
+### GET /historico
+
+Displays processing history.
+
+```python
+@app.route('/historico')
+def historico():
+    hist = session.get('historico', [])
+    return render_template('historico.html', historico=hist)
+```
+
+Reference: `app.py:118-121`
+
+<ResponseField name="template" type="string" value="historico.html" />
+<ResponseField name="historico" type="list[object]">
+  Last 10 processing operations
+</ResponseField>
+
+### POST /upload
+
+Handles file upload and processing.
+
+```python
+@app.route('/upload', methods=['POST'])
+def upload_file():
+    # 1. Validate file presence
+    if 'arquivo_excel' not in request.files:
+        return redirect(url_for('index', error='Nenhum arquivo selecionado'))
+    
+    file = request.files['arquivo_excel']
+    if file.filename == '':
+        return redirect(url_for('index', error='Nenhum arquivo selecionado'))
+
+    # 2. Validate file extension
+    if not file.filename.lower().endswith(('.csv', '.xls', '.xlsx')):
+        return redirect(url_for('index', 
+            error='Por favor, selecione um arquivo .csv, .xls ou .xlsx'))
+
+    try:
+        # 3. Get keywords from session
+        palavras_chave = session.get('custom_keywords', DEFAULT_KEYWORDS)
+        
+        # 4. Process file
+        df_original, resultado_final = processar_arquivo(file, palavras_chave)
+        stats = gerar_estatisticas(df_original, resultado_final, palavras_chave)
+        
+        # 5. Save to temporary file
+        temp_filename = f"{uuid.uuid4().hex}.csv"
+        file_path = os.path.join(TEMP_FOLDER, temp_filename)
+        resultado_final.to_csv(file_path, index=False)
+        
+        # 6. Store filename in session
+        session['temp_filename'] = temp_filename
+        session['last_stats'] = stats
+        salvar_historico(file.filename, stats)
+        
+        # 7. Prepare HTML table for display
+        resultado_para_exibicao = resultado_final.copy()
+        if not resultado_final.empty:
+            resultado_para_exibicao['OS Digital'] = \
+                resultado_para_exibicao['OS Digital'].apply(criar_links)
+        
+        tabela_html = resultado_para_exibicao.to_html(
+            classes="table table-striped table-hover",
+            table_id="tabela-resultados",
+            index=False,
+            justify="left",
+            border=0,
+            escape=False
+        )
+        
+        # 8. Render results
+        return render_template('resultado.html', 
+                             table=tabela_html, 
+                             has_results=not resultado_final.empty,
+                             stats=stats,
+                             palavras_utilizadas=palavras_chave)
+        
+    except Exception as e:
+        print(f"Ocorreu um erro: {e}")
+        return redirect(url_for('index', error=f'Erro ao processar o arquivo: {str(e)}'))
+```
+
+Reference: `app.py:123-176`
+
+**POST Parameters:**
+<ParamField body="arquivo_excel" type="file" required>
+  File upload field (accepts CSV, XLS, XLSX)
+</ParamField>
+
+**Success Response:**
+<ResponseField name="template" type="string" value="resultado.html" />
+<ResponseField name="table" type="string">
+  HTML table string with Bootstrap classes
+</ResponseField>
+<ResponseField name="has_results" type="boolean">
+  True if filtered results exist
+</ResponseField>
+<ResponseField name="stats" type="object">
+  Statistics dictionary
+</ResponseField>
+<ResponseField name="palavras_utilizadas" type="list[string]">
+  Keywords used for filtering
+</ResponseField>
+
+### GET /download/excel
+
+Exports filtered results as Excel file.
+
+```python
+@app.route('/download/excel')
+def download_excel():
+    # 1. Retrieve data from temp file
+    df = get_dataframe_from_temp_file()
+    if df is None:
+        return redirect(url_for('index', 
+            error="Os resultados expiraram. Por favor, processe o arquivo novamente."))
+    
+    stats = session.get('last_stats', {})
+    
+    # 2. Create Excel file in memory
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        # Sheet 1: Filtered tasks
+        df.to_excel(writer, index=False, sheet_name='Tarefas Encontradas')
+        
+        # Sheet 2: Statistics
+        stats_df = pd.DataFrame([
+            ['Total de Registros', stats.get('total', 'N/A')],
+            ['Tarefas Encontradas', stats.get('filtrados', 'N/A')],
+            ['Taxa de Ocorrência (%)', stats.get('percentual', 'N/A')],
+            ['Data de Geração', datetime.now().strftime('%d/%m/%Y %H:%M')]
+        ], columns=['Métrica', 'Valor'])
+        stats_df.to_excel(writer, index=False, sheet_name='Estatísticas')
+    
+    output.seek(0)
+    
+    # 3. Return as downloadable file
+    return Response(
+        output,
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheet.sheet",
+        headers={"Content-Disposition": "attachment;filename=relatorio_filtrado.xlsx"}
+    )
+```
+
+Reference: `app.py:178-204`
+
+<ResponseField name="mimetype" type="string">
+  `application/vnd.openxmlformats-officedocument.spreadsheet.sheet`
+</ResponseField>
+<ResponseField name="filename" type="string" value="relatorio_filtrado.xlsx" />
+
+### GET /download/pdf
+
+Exports filtered results as PDF report.
+
+```python
+@app.route('/download/pdf')
+def download_pdf():
+    # 1. Retrieve data from temp file
+    df = get_dataframe_from_temp_file()
+    if df is None:
+        return redirect(url_for('index', 
+            error="Os resultados expiraram. Por favor, processe o arquivo novamente."))
+    
+    stats = session.get('last_stats', {})
+    palavras_utilizadas = session.get('custom_keywords', [])
+    
+    # 2. Prepare data with clickable links
+    df_render = df.copy()
+    if not df.empty:
+        df_render['OS Digital'] = df_render['OS Digital'].apply(criar_links)
+
+    # 3. Generate HTML table
+    tabela_html = df_render.to_html(
+        index=False, escape=False, classes="tabela-pdf"
+    ) if not df.empty else "<p>Nenhuma tarefa encontrada.</p>"
+    
+    # 4. Build complete HTML document with styling
+    full_html = f"""
+    <html>
+      <head>
+        <meta charset="utf-8">
+        <style>
+          body {{ font-family: Arial, sans-serif; margin: 20px; color: #333; }}
+          h1 {{ color: #0056b3; }}
+          .header {{ padding: 20px; margin-bottom: 20px; 
+                     border-radius: 5px; background-color: #f8f9fa; }}
+          .stats {{ display: flex; justify-content: space-around; 
+                    margin: 20px 0; background-color: #e9ecef; 
+                    padding: 15px; border-radius: 5px; }}
+          .stat-box {{ text-align: center; }}
+          .stat-number {{ font-size: 24px; font-weight: bold; color: #007bff; }}
+          .palavras-chave {{ background-color: #fff3cd; padding: 15px; 
+                             margin: 20px 0; border-radius: 5px; 
+                             border-left: 4px solid #ffc107; }}
+          .tabela-pdf {{ border-collapse: collapse; width: 100%; font-size: 10px; }}
+          .tabela-pdf th, .tabela-pdf td {{ text-align: left; padding: 6px; 
+                                            border: 1px solid #ddd; }}
+          .tabela-pdf th {{ background-color: #f2f2f2; }}
+          a {{ color: #007bff; text-decoration: none; }}
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <h1>Relatório de Tarefas com Ação Necessária</h1>
+          <p><strong>Gerado em:</strong> 
+             {datetime.now().strftime('%d/%m/%Y às %H:%M')}</p>
+        </div>
+        <div class="stats">
+          <div class="stat-box">
+            <div class="stat-number">{stats.get('total', 'N/A')}</div>
+            <div>Total de Registros</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-number">{stats.get('filtrados', 'N/A')}</div>
+            <div>Tarefas Encontradas</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-number">{stats.get('percentual', 'N/A')}%</div>
+            <div>Taxa de Ocorrência</div>
+          </div>
+        </div>
+        <div class="palavras-chave">
+          <h3>Palavras-chave utilizadas:</h3>
+          <p>{', '.join(palavras_utilizadas)}</p>
+        </div>
+        {tabela_html}
+      </body>
+    </html>
+    """
+    
+    # 5. Convert HTML to PDF using WeasyPrint
+    pdf = HTML(string=full_html).write_pdf()
+
+    # 6. Return as downloadable file
+    return Response(
+        pdf,
+        mimetype="application/pdf",
+        headers={"Content-Disposition": "attachment;filename=relatorio_filtrado.pdf"}
+    )
+```
+
+Reference: `app.py:206-263`
+
+<ResponseField name="mimetype" type="string" value="application/pdf" />
+<ResponseField name="filename" type="string" value="relatorio_filtrado.pdf" />
+
+## File Processing Flow
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│ 1. User uploads CSV/Excel file via web form                │
+│    POST /upload with multipart/form-data                   │
+└────────────────────┬────────────────────────────────────────┘
+                     │
+                     ▼
+┌─────────────────────────────────────────────────────────────┐
+│ 2. File validation                                          │
+│    - Check file exists                                      │
+│    - Validate extension (.csv, .xls, .xlsx)                │
+└────────────────────┬────────────────────────────────────────┘
+                     │
+                     ▼
+┌─────────────────────────────────────────────────────────────┐
+│ 3. processar_arquivo(file, keywords)                        │
+│    - Read file with pandas (skiprows=5)                    │
+│    - Build regex pattern from keywords                     │
+│    - Filter rows where Relato matches pattern              │
+│    - Extract specific columns                              │
+└────────────────────┬────────────────────────────────────────┘
+                     │
+                     ▼
+┌─────────────────────────────────────────────────────────────┐
+│ 4. gerar_estatisticas(original_df, filtered_df, keywords)  │
+│    - Count total and filtered rows                         │
+│    - Calculate percentage                                  │
+│    - Count matches per keyword                             │
+└────────────────────┬────────────────────────────────────────┘
+                     │
+                     ▼
+┌─────────────────────────────────────────────────────────────┐
+│ 5. Save results to temporary file                          │
+│    - Generate UUID filename                                │
+│    - Save filtered DataFrame as CSV                        │
+│    - Store filename in session                             │
+└────────────────────┬────────────────────────────────────────┘
+                     │
+                     ▼
+┌─────────────────────────────────────────────────────────────┐
+│ 6. Display results                                          │
+│    - Convert OS Digital URLs to links                      │
+│    - Generate HTML table                                   │
+│    - Render resultado.html template                        │
+└────────────────────┬────────────────────────────────────────┘
+                     │
+                     ▼
+┌─────────────────────────────────────────────────────────────┐
+│ 7. Optional: Export results                                 │
+│    - GET /download/excel → XLSX with 2 sheets              │
+│    - GET /download/pdf → Styled PDF report                 │
+│    Both read from temp file using session filename         │
+└─────────────────────────────────────────────────────────────┘
+```
+
+## Temporary File Storage Architecture
+
+### Storage Strategy
+
+Instead of storing DataFrames in session (which has size limits), the application uses a file-based approach:
+
+1. **Generate unique filename** using UUID
+2. **Save filtered results** as CSV to `temp/` directory
+3. **Store only filename** in session (lightweight)
+4. **Read from file** when needed for exports
+
+### Benefits
+
+<CardGroup cols={2}>
+  <Card title="Session Size" icon="compress">
+    Session contains only a small filename string instead of large data
+  </Card>
+  <Card title="Memory Efficiency" icon="memory">
+    Data is on disk, not in memory, reducing RAM usage
+  </Card>
+  <Card title="Consistency" icon="check">
+    Same data used for Excel and PDF exports
+  </Card>
+  <Card title="Security" icon="lock">
+    UUID filenames prevent enumeration attacks
+  </Card>
+</CardGroup>
+
+### Limitations
+
+<Warning>
+**No Automatic Cleanup**
+
+Temporary files persist indefinitely. Implement a cleanup strategy:
+- Cron job to delete files older than X hours
+- Application startup cleanup routine
+- Periodic manual maintenance
+</Warning>
+
+<Warning>
+**Session Dependency**
+
+If session expires or is cleared, the reference to temp files is lost, even though files still exist on disk.
+</Warning>
+
+## Error Handling
+
+### File Processing Errors
+
+```python
+try:
+    df_original, resultado_final = processar_arquivo(file, palavras_chave)
+    # ... processing ...
+except Exception as e:
+    print(f"Ocorreu um erro: {e}")  # Server-side logging
+    return redirect(url_for('index', 
+        error=f'Erro ao processar o arquivo: {str(e)}'))
+```
+
+Reference: `app.py:173-176`
+
+### Missing Temp File Errors
+
+```python
+df = get_dataframe_from_temp_file()
+if df is None:
+    return redirect(url_for('index', 
+        error="Os resultados expiraram. Por favor, processe o arquivo novamente.")
+```
+
+Reference: `app.py:182-183, 209-211`
+
+## Application Entry Point
+
+```python
+if __name__ == '__main__':
+    app.run(debug=True)
+```
+
+Reference: `app.py:265-266`
+
+<Warning>
+**Debug Mode in Production**
+
+`debug=True` should NEVER be used in production. Set `debug=False` or omit it entirely for production deployment.
+</Warning>
+
+## Production Deployment Considerations
+
+<Card title="WSGI Server" icon="server">
+  Use Gunicorn or uWSGI instead of Flask's built-in server
+  
+  ```bash
+  gunicorn -w 4 -b 0.0.0.0:8000 app:app
+  ```
+</Card>
+
+<Card title="Environment Variables" icon="key">
+  - Set `SECRET_KEY` via environment, not .env file
+  - Use strong, random key in production
+  - Never commit secrets to version control
+</Card>
+
+<Card title="File Cleanup" icon="broom">
+  Implement scheduled cleanup of temp/ directory
+  
+  ```bash
+  # Crontab example: delete files older than 6 hours
+  0 * * * * find /path/to/temp -type f -mmin +360 -delete
+  ```
+</Card>
+
+<Card title="Session Storage" icon="database">
+  Consider Redis or database-backed sessions for:
+  - Multiple application instances
+  - Load balancing scenarios
+  - Persistent sessions across restarts
+</Card>
+
+<Card title="Security Headers" icon="shield-halved">
+  Add security middleware for production:
+  - HTTPS enforcement
+  - CSRF protection
+  - Content Security Policy
+  - Rate limiting on /upload
+</Card>

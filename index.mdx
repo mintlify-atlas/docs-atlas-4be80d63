@@ -1,97 +1,74 @@
 ---
-title: "Introduction"
-description: "Welcome to the new home for your documentation"
+title: "Welcome"
+description: "Powerful task report analysis and filtering for Auvo CSV exports"
 ---
 
-## Setting up
+# Extrator de Tarefas Auvo
 
-Get your documentation site up and running in minutes.
+A Flask-based web application designed to streamline the analysis of task reports exported from Auvo. Upload CSV files, filter tasks by customizable keywords, and export professional reports in multiple formats.
 
-<Card
-  title="Start here"
-  icon="rocket"
-  href="/quickstart"
-  horizontal
->
-  Follow our three step quickstart guide.
-</Card>
+## Key Features
 
-## Make it yours
-
-Design a docs site that looks great and empowers your users.
-
-<Columns cols={2}>
-  <Card
-    title="Edit locally"
-    icon="pen-to-square"
-    href="/development"
-  >
-    Edit your docs locally and preview them in real time.
+<CardGroup cols={2}>
+  <Card title="Smart Filtering" icon="filter" href="/features/filtering">
+    Automatically identify tasks containing specific keywords like "quebrado", "trocar peça", and more
   </Card>
-  <Card
-    title="Customize your site"
-    icon="palette"
-    href="/essentials/settings"
-  >
-    Customize the design and colors of your site to match your brand.
+  <Card title="Multiple Formats" icon="file-export" href="/features/export-formats">
+    Export filtered results to Excel or PDF with comprehensive statistics
   </Card>
-    <Card
-    title="Set up navigation"
-    icon="map"
-    href="/essentials/navigation"
-  >
-    Organize your docs to help users find what they need and succeed with your product.
+  <Card title="Interactive Results" icon="table" href="/guide/viewing-results">
+    View results in a searchable, sortable table with real-time filtering
   </Card>
-  <Card
-    title="API documentation"
-    icon="terminal"
-    href="/api-reference/introduction"
-  >
-    Auto-generate API documentation from OpenAPI specifications.
+  <Card title="Processing History" icon="clock-rotate-left" href="/features/history">
+    Track your last 10 processed files with key metrics
   </Card>
-</Columns>
+</CardGroup>
 
-## Create beautiful pages
+## Quick Start
 
-Everything you need to create world-class documentation.
+Get up and running in minutes with these simple steps.
 
-<Columns cols={2}>
-  <Card
-    title="Write with MDX"
-    icon="pen-fancy"
-    href="/essentials/markdown"
-  >
-    Use MDX to style your docs pages.
+<CardGroup cols={3}>
+  <Card title="Installation" icon="download" href="/installation">
+    Install Python dependencies and configure your environment
   </Card>
-  <Card
-    title="Code samples"
-    icon="code"
-    href="/essentials/code"
-  >
-    Add sample code to demonstrate how to use your product.
+  <Card title="Quick Start" icon="rocket" href="/quickstart">
+    Process your first Auvo report
   </Card>
-  <Card
-    title="Images"
-    icon="image"
-    href="/essentials/images"
-  >
-    Display images and other media.
+  <Card title="Configuration" icon="gear" href="/guide/configuring-keywords">
+    Customize keywords for your workflow
   </Card>
-  <Card
-    title="Reusable snippets"
-    icon="recycle"
-    href="/essentials/reusable-snippets"
-  >
-    Write once and reuse across your docs.
-  </Card>
-</Columns>
+</CardGroup>
 
-## Need inspiration?
+## How It Works
 
-<Card
-  title="See complete examples"
-  icon="stars"
-  href="https://mintlify.com/customers"
->
-  Browse our showcase of exceptional documentation sites.
-</Card>
+<Steps>
+  <Step title="Upload your CSV file">
+    Export a task report from Auvo and upload the CSV file through the web interface.
+  </Step>
+  <Step title="Automatic filtering">
+    The application scans the "Relato" column for your configured keywords and extracts matching tasks.
+  </Step>
+  <Step title="Review and export">
+    View filtered results with statistics, search through tasks, and export to Excel or PDF.
+  </Step>
+</Steps>
+
+## What You'll Find
+
+Analyze task reports containing keywords that indicate work requiring action, such as equipment failures, part replacements, or installation requests. The tool helps you quickly identify and report on tasks that need follow-up.
+
+<Note>
+  The application supports CSV, XLS, and XLSX file formats exported from Auvo.
+</Note>
+
+## Need Help?
+
+<CardGroup cols={2}>
+  <Card title="Troubleshooting" icon="life-ring" href="/troubleshooting">
+    Common issues and solutions
+  </Card>
+  <Card title="FAQ" icon="circle-question" href="/faq">
+    Frequently asked questions
+  </Card>
+</CardGroup>

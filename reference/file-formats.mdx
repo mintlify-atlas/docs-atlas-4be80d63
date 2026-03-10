@@ -1,0 +1,204 @@
+---
+title: 'File Formats'
+description: 'Detailed specification of supported file formats, column structure, and data requirements'
+icon: 'file-spreadsheet'
+---
+
+## Supported File Formats
+
+The Extrator de Tarefas Auvo accepts three file formats for processing:
+
+- **CSV** (`.csv`)
+- **Excel 97-2003** (`.xls`)
+- **Excel 2007+** (`.xlsx`)
+
+## File Processing Implementation
+
+The application uses pandas to read files with format-specific handling:
+
+```python
+def processar_arquivo(file, palavras_chave):
+    """Processa o arquivo CSV ou Excel e retorna os dados filtrados"""
+    filename = file.filename.lower()
+    
+    if filename.endswith('.csv'):
+        df = pd.read_csv(file, skiprows=5)
+    elif filename.endswith(('.xls', '.xlsx')):
+        df = pd.read_excel(file, skiprows=5, engine='openpyxl')
+    else:
+        raise ValueError("Formato de arquivo não suportado")
+```
+
+Reference: `app.py:32-45`
+
+## Critical: skiprows Behavior
+
+<Warning>
+**All file formats skip the first 5 rows** during processing using `skiprows=5`.
+</Warning>
+
+This is designed for Auvo system exports which include:
+- Header information (rows 1-5)
+- Actual column headers (row 6)
+- Data (rows 7+)
+
+### skiprows Parameter Details
+
+<ParamField path="skiprows" type="integer" default="5">
+  Number of rows to skip from the top of the file before reading column headers.
+  
+  **Used by:**
+  - `pd.read_csv()` for CSV files
+  - `pd.read_excel()` for Excel files
+  
+  **Effect:** The 6th row becomes the header row for the DataFrame.
+</ParamField>
+
+## Required Column Structure
+
+After the header row (row 6), the file must contain these exact columns:
+
+<ParamField path="Data" type="string" required>
+  Date when the task was registered or completed.
+  
+  **Format:** Any date format recognized by pandas
+</ParamField>
+
+<ParamField path="Cliente" type="string" required>
+  Client name or identifier for the task.
+</ParamField>
+
+<ParamField path="Endereco" type="string" required>
+  Address where the task should be performed or service delivered.
+</ParamField>
+
+<ParamField path="OS Digital" type="string" required>
+  Digital work order identifier or URL.
+  
+  **Special Handling:** If the value starts with `http`, it's automatically converted to a clickable HTML link in the UI and PDF exports.
+</ParamField>
+
+<ParamField path="Relato" type="string" required>
+  Task description or report. This is the **primary search field**.
+  
+  **Purpose:** All keyword filtering is performed on this column.
+  
+  **Search Behavior:**
+  - Case-insensitive matching
+  - Supports regex patterns
+  - NA/null values are excluded from matches
+</ParamField>
+
+## Column Filtering Logic
+
+The application extracts only these columns from the filtered results:
+
+```python
+colunas_resultado = ['Data', 'Cliente', 'Endereco', 'OS Digital', 'Relato']
+return df, necessidades[colunas_resultado]
+```
+
+Reference: `app.py:52-53`
+
+### Keyword Search Implementation
+
+```python
+regex_busca = '|'.join(palavras_chave)
+coluna_descricao = 'Relato'
+necessidades = df[df[coluna_descricao].astype(str).str.contains(
+    regex_busca, 
+    case=False, 
+    na=False
+)].copy()
+```
+
+Reference: `app.py:47-50`
+
+<ResponseField name="regex_busca" type="string">
+  Pipe-separated regex pattern combining all keywords
+  
+  **Example:** `"solicitar peça|quebrado|trocar cabo"`
+</ResponseField>
+
+<ResponseField name="case" type="boolean" default="False">
+  Case-insensitive search enabled
+</ResponseField>
+
+<ResponseField name="na" type="boolean" default="False">
+  Excludes rows where Relato is null/NA
+</ResponseField>
+
+## File Format Validation
+
+### Upload Validation
+
+File format is validated at upload time:
+
+```python
+if not file.filename.lower().endswith(('.csv', '.xls', '.xlsx')):
+    return redirect(url_for('index', 
+        error='Por favor, selecione um arquivo .csv, .xls ou .xlsx'))
+```
+
+Reference: `app.py:133-134`
+
+### Error Handling
+
+<ResponseField name="ValueError" type="exception">
+  Raised when an unsupported file format is provided
+  
+  **Message:** "Formato de arquivo não suportado. Use .csv, .xls ou .xlsx"
+</ResponseField>
+
+## Excel Engine Configuration
+
+For Excel files, the application uses **openpyxl** as the parsing engine:
+
+```python
+df = pd.read_excel(file, skiprows=5, engine='openpyxl')
+```
+
+<Info>
+**openpyxl** is explicitly specified in `requirements.txt` (version 3.1.5) and is required for reading `.xlsx` files.
+</Info>
+
+## Example File Structure
+
+```
+Row 1: [Auvo Export Header]
+Row 2: [System Information]
+Row 3: [Date Range]
+Row 4: [User Information]
+Row 5: [Empty or Metadata]
+Row 6: Data | Cliente | Endereco | OS Digital | Relato
+Row 7: 01/03/2026 | Cliente A | Rua X, 123 | http://auvo.com/os/123 | Solicitar peça quebrada
+Row 8: 02/03/2026 | Cliente B | Rua Y, 456 | http://auvo.com/os/124 | Manutenção preventiva
+...
+```
+
+Only rows 7+ are processed as data after `skiprows=5` removes rows 1-5.
+
+## Data Type Handling
+
+### String Conversion
+
+All values in the Relato column are converted to strings before pattern matching:
+
+```python
+df[coluna_descricao].astype(str).str.contains(...)
+```
+
+This ensures numeric or date values in the Relato column don't cause type errors.
+
+## Column Name Sensitivity
+
+<Warning>
+Column names are **case-sensitive** and must match exactly:
+- `Data` (not `data` or `DATA`)
+- `Cliente` (not `cliente`)
+- `Endereco` (not `Endereço` or `endereco`)
+- `OS Digital` (not `OS_Digital` or `os digital`)
+- `Relato` (not `relato`)
+</Warning>
+
+Mismatched column names will cause KeyError exceptions during processing.

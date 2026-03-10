@@ -1,80 +1,376 @@
 ---
-title: "Quickstart"
-description: "Start building awesome documentation in minutes"
+title: Quick Start
+description: Step-by-step guide to processing your first Auvo task report and generating filtered results.
 ---
 
-## Get started in three steps
+## Overview
 
-Get your documentation site running locally and make your first customization.
-
-### Step 1: Set up your local environment
-
-<AccordionGroup>
-  <Accordion icon="copy" title="Clone your docs locally">
-    During the onboarding process, you created a GitHub repository with your docs content if you didn't already have one. You can find a link to this repository in your [dashboard](https://dashboard.mintlify.com).
-    
-    To clone the repository locally so that you can make and preview changes to your docs, follow the [Cloning a repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) guide in the GitHub docs.
-  </Accordion>
-  <Accordion icon="rectangle-terminal" title="Start the preview server">
-    1. Install the Mintlify CLI: `npm i -g mint`
-    2. Navigate to your docs directory and run: `mint dev`
-    3. Open `http://localhost:3000` to see your docs live!
-    
-    <Tip>Your preview updates automatically as you edit files.</Tip>
-  </Accordion>
-</AccordionGroup>
-
-### Step 2: Deploy your changes
-
-<AccordionGroup>
-  <Accordion icon="github" title="Install our GitHub app">
-    Install the Mintlify GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app).
-    
-    Our GitHub app automatically deploys your changes to your docs site, so you don't need to manage deployments yourself.
-</Accordion>
-<Accordion icon="palette" title="Update your site name and colors">
-    For a first change, let's update the name and colors of your docs site.
-
-    1. Open `docs.json` in your editor.
-    2. Change the `"name"` field to your project name.
-    3. Update the `"colors"` to match your brand.
-    4. Save and see your changes instantly at `http://localhost:3000`.
-
-    <Tip>Try changing the primary color to see an immediate difference!</Tip>
-  </Accordion>
-</AccordionGroup>
-
-### Step 3: Go live
-
-<Accordion icon="rocket" title="Publish your docs">
-  1. Commit and push your changes.
-  2. Your docs will update and be live in moments!
-</Accordion>
-
-## Next steps
-
-Now that you have your docs running, explore these key features:
-
-<CardGroup cols={2}>
-
-<Card title="Write Content" icon="pen-to-square" href="/essentials/markdown">
-  Learn MDX syntax and start writing your documentation.
-</Card>
-
-<Card title="Customize style" icon="palette" href="/essentials/settings">
-  Make your docs match your brand perfectly.
-</Card>
-
-<Card title="Add code examples" icon="square-code" href="/essentials/code">
-  Include syntax-highlighted code blocks.
-</Card>
-
-<Card title="API documentation" icon="code" href="/api-reference/introduction">
-  Auto-generate API docs from OpenAPI specs.
-</Card>
-
-</CardGroup>
+This guide will walk you through processing your first Auvo task report in just a few minutes. You'll learn how to upload a CSV file, view filtered results, and export reports.
 
 <Note>
-  **Need help?** See our [full documentation](https://mintlify.com/docs) or join our [community](https://mintlify.com/community).
+Make sure you've completed the [installation](/installation) steps before proceeding with this guide.
 </Note>
+
+## Starting the Application
+
+<Steps>
+  <Step title="Activate Virtual Environment">
+    First, ensure your virtual environment is activated:
+    
+    <CodeGroup>
+    ```bash Windows (Command Prompt)
+    .\venv\Scripts\activate
+    ```
+    
+    ```bash Linux/macOS
+    source venv/bin/activate
+    ```
+    </CodeGroup>
+    
+    You should see `(venv)` in your terminal prompt.
+  </Step>
+  
+  <Step title="Start the Flask Server">
+    Run the application:
+    
+    ```bash
+    python app.py
+    ```
+    
+    Wait for the server to start. You should see:
+    
+    ```
+    * Running on http://127.0.0.1:5000
+    ```
+  </Step>
+  
+  <Step title="Open in Browser">
+    Navigate to the application in your web browser:
+    
+    ```
+    http://127.0.0.1:5000
+    ```
+  </Step>
+</Steps>
+
+## Processing Your First File
+
+### Understanding Auvo CSV Format
+
+The application expects CSV files exported from Auvo with the following characteristics:
+
+- **Header rows**: The first 5 rows are automatically skipped (Auvo exports include metadata)
+- **Required column**: Must contain a "Relato" (Report) column with task descriptions
+- **Supported formats**: `.csv`, `.xls`, or `.xlsx`
+
+<Warning>
+Ensure your CSV file is exported directly from Auvo without manual modifications. The application skips the first 5 rows to account for Auvo's export format.
+</Warning>
+
+### Upload and Process
+
+<Steps>
+  <Step title="Select Your File">
+    On the home page, click the **"Selecionar arquivo"** (Select file) button and choose your Auvo export file.
+    
+    Supported formats:
+    - `.csv` - Comma-separated values
+    - `.xls` - Legacy Excel format
+    - `.xlsx` - Modern Excel format
+  </Step>
+  
+  <Step title="Process the Report">
+    Click **"Processar Relatório"** (Process Report) to start the analysis.
+    
+    The application will:
+    1. Read the file and skip the first 5 rows
+    2. Extract the "Relato" column
+    3. Filter tasks containing any of the configured keywords
+    4. Generate statistics about matches
+    5. Save results to a temporary file for export
+    
+    <Note>
+    Processing typically takes 1-3 seconds for files with up to 10,000 rows.
+    </Note>
+  </Step>
+  
+  <Step title="Review Results">
+    The results page displays:
+    
+    - **Statistics Dashboard**: Total records, tasks found, and occurrence rate
+    - **Keyword Breakdown**: How many times each keyword appeared
+    - **Filtered Table**: Tasks containing the keywords with these columns:
+      - Data (Date)
+      - Cliente (Client)
+      - Endereco (Address)
+      - OS Digital (Digital Work Order - clickable link)
+      - Relato (Report description)
+    
+    Use the search box above the table to further filter results dynamically.
+  </Step>
+</Steps>
+
+## Understanding the Results
+
+### Statistics Panel
+
+The statistics panel shows three key metrics:
+
+```python
+{
+  'total': 1523,           # Total records in the uploaded file
+  'filtrados': 47,         # Tasks matching keywords
+  'percentual': 3.1,       # Percentage of tasks found
+  'por_palavra': {         # Breakdown by keyword
+    'quebrado': 12,
+    'trocar': 18,
+    'instalar': 17
+  }
+}
+```
+
+### Example Filtered Task
+
+Here's what a typical filtered task looks like:
+
+| Data | Cliente | Endereco | OS Digital | Relato |
+|------|---------|----------|------------|--------|
+| 15/03/2026 | Empresa ABC | Rua Principal, 123 | [Link](https://auvo.com.br/os/12345) | Equipamento quebrado, necessário trocar peça |
+
+<Note>
+The "OS Digital" column contains clickable links that open the work order directly in Auvo.
+</Note>
+
+## Exporting Results
+
+The application offers two export formats:
+
+<Tabs>
+  <Tab title="Excel Export">
+    ### Excel (.xlsx) Format
+    
+    Click **"Baixar Excel"** to download a multi-sheet workbook:
+    
+    **Sheet 1: Tarefas Encontradas** (Tasks Found)
+    - All filtered tasks with 5 columns
+    - Formatted for easy reading in Excel
+    - Can be further filtered and analyzed
+    
+    **Sheet 2: Estatísticas** (Statistics)
+    - Total Records
+    - Tasks Found
+    - Occurrence Rate (%)
+    - Generation Date/Time
+    
+    The export code:
+    
+    ```python app.py
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        df.to_excel(writer, index=False, sheet_name='Tarefas Encontradas')
+        stats_df = pd.DataFrame([
+            ['Total de Registros', stats.get('total', 'N/A')],
+            ['Tarefas Encontradas', stats.get('filtrados', 'N/A')],
+            ['Taxa de Ocorrência (%)', stats.get('percentual', 'N/A')],
+            ['Data de Geração', datetime.now().strftime('%d/%m/%Y %H:%M')]
+        ], columns=['Métrica', 'Valor'])
+        stats_df.to_excel(writer, index=False, sheet_name='Estatísticas')
+    ```
+  </Tab>
+  
+  <Tab title="PDF Export">
+    ### PDF Format
+    
+    Click **"Baixar PDF"** to generate a formatted report:
+    
+    **Includes:**
+    - Professional header with generation date
+    - Statistics dashboard with visual formatting
+    - Keywords used in the filter
+    - Complete task table with clickable links
+    
+    **Styling Features:**
+    - Color-coded sections
+    - Responsive table formatting (font-size: 10px)
+    - Clickable OS Digital links in blue
+    - Professional margins and spacing
+    
+    <Note>
+    PDF generation uses WeasyPrint, which renders HTML/CSS into high-quality PDFs suitable for printing and sharing.
+    </Note>
+  </Tab>
+</Tabs>
+
+## Customizing Keywords
+
+The default keywords work for common maintenance scenarios, but you can customize them:
+
+<Steps>
+  <Step title="Navigate to Configuration">
+    Click **"Configurações"** in the navigation menu.
+  </Step>
+  
+  <Step title="Edit Keywords">
+    You'll see the current keywords in a text field:
+    
+    ```
+    solicitar peça, quebrado, quebrada, quebrados, orçamento, danificada, danificado, trocar cabo, soldar, trocar, instalar
+    ```
+    
+    Modify this list to match your needs. For example:
+    
+    ```
+    urgente, crítico, parado, sem funcionamento, manutenção preventiva
+    ```
+  </Step>
+  
+  <Step title="Save Changes">
+    Click **"Salvar"** (Save) to update the keywords.
+    
+    <Warning>
+    Keywords are stored in the session and will reset when you close the browser. The application uses session-based storage:
+    
+    ```python app.py
+    session['custom_keywords'] = [k.strip() for k in keywords if k.strip()]
+    ```
+    </Warning>
+  </Step>
+  
+  <Step title="Re-process File">
+    Return to the home page and process your file again with the new keywords.
+  </Step>
+</Steps>
+
+## Viewing Processing History
+
+The application maintains a history of your recent processing activities:
+
+1. Click **"Histórico"** in the navigation menu
+2. View the last 10 processed files with:
+   - File name
+   - Processing date and time
+   - Number of tasks found
+   - Total records processed
+
+```python app.py
+def salvar_historico(filename, stats):
+    hist = session.get('historico', [])
+    hist.insert(0, {
+        'arquivo': filename,
+        'data': datetime.now().strftime('%d/%m/%Y %H:%M'),
+        'encontrados': stats['filtrados'],
+        'total': stats['total']
+    })
+    session['historico'] = hist[:10]  # Keep last 10 entries
+```
+
+<Note>
+History is session-based and will be cleared when you close your browser.
+</Note>
+
+## How the Filtering Works
+
+Understanding the filtering mechanism helps you optimize your keywords:
+
+```python app.py
+def processar_arquivo(file, palavras_chave):
+    # Read file (skipping first 5 rows)
+    if filename.endswith('.csv'):
+        df = pd.read_csv(file, skiprows=5)
+    elif filename.endswith(('.xls', '.xlsx')):
+        df = pd.read_excel(file, skiprows=5, engine='openpyxl')
+    
+    # Create regex pattern from keywords
+    regex_busca = '|'.join(palavras_chave)  # Creates: 'keyword1|keyword2|keyword3'
+    
+    # Filter rows where 'Relato' column contains any keyword (case-insensitive)
+    coluna_descricao = 'Relato'
+    necessidades = df[df[coluna_descricao].astype(str).str.contains(
+        regex_busca, 
+        case=False,  # Ignore case
+        na=False     # Treat NaN as False
+    )].copy()
+    
+    # Return only specific columns
+    colunas_resultado = ['Data', 'Cliente', 'Endereco', 'OS Digital', 'Relato']
+    return df, necessidades[colunas_resultado]
+```
+
+**Key Points:**
+- Filtering is **case-insensitive** ("Quebrado" matches "quebrado")
+- Uses **regex OR logic** (matches if ANY keyword is found)
+- **NaN values** are treated as non-matches
+- Supports **partial matches** ("trocar" matches "trocar peça")
+
+## Common Use Cases
+
+<AccordionGroup>
+  <Accordion title="Finding Equipment Failures">
+    Use keywords focused on equipment status:
+    
+    ```
+    quebrado, danificado, não funciona, parado, com defeito
+    ```
+  </Accordion>
+  
+  <Accordion title="Parts Replacement Tracking">
+    Filter for part-related tasks:
+    
+    ```
+    solicitar peça, trocar peça, substituir, peça danificada, precisa de peça
+    ```
+  </Accordion>
+  
+  <Accordion title="Urgent Tasks">
+    Identify high-priority items:
+    
+    ```
+    urgente, emergência, crítico, prioridade, parado
+    ```
+  </Accordion>
+  
+  <Accordion title="Installation Tasks">
+    Track new installations:
+    
+    ```
+    instalar, instalação, novo equipamento, implantar, configurar
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Configure Keywords" icon="sliders">
+    Customize filtering keywords to match your specific needs
+  </Card>
+  
+  <Card title="Export Reports" icon="file-export">
+    Generate Excel or PDF reports for your team
+  </Card>
+  
+  <Card title="View History" icon="clock-rotate-left">
+    Track your processing activities over time
+  </Card>
+  
+  <Card title="Advanced Filtering" icon="filter">
+    Combine multiple keywords for precise filtering
+  </Card>
+</CardGroup>
+
+## Tips for Best Results
+
+<Tip>
+**Optimize Keywords**: Start with broad terms and refine based on results. Common maintenance terms in Portuguese like "quebrado", "danificado", and "trocar" work well.
+</Tip>
+
+<Tip>
+**Regular Exports**: The temp files are stored with unique IDs. Export your results immediately after processing to avoid session expiration.
+</Tip>
+
+<Tip>
+**Use the Search Box**: The results table includes a dynamic search feature. Use it to further narrow down results without reprocessing the file.
+</Tip>
+
+<Tip>
+**Check Statistics**: The percentage metric helps you understand if your keywords are too broad (high %) or too narrow (low %). Aim for 3-10% for most use cases.
+</Tip>

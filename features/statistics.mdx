@@ -1,0 +1,207 @@
+---
+title: 'Statistics Dashboard'
+description: 'Real-time metrics and analytics for filtered task reports'
+icon: 'chart-bar'
+---
+
+## Overview
+
+The statistics dashboard provides instant insights into the filtering results, including total records, filtered tasks, occurrence rates, and per-keyword breakdown.
+
+## Core Function
+
+Statistics generation is handled by `gerar_estatisticas()` in `app.py:55`:
+
+```python
+def gerar_estatisticas(df_original, df_filtrado, palavras_chave):
+    """Gera estatísticas simples dos dados"""
+    total = len(df_original)
+    filtrados = len(df_filtrado)
+    
+    stats = {
+        'total': total,
+        'filtrados': filtrados,
+        'percentual': round((filtrados/total)*100, 1) if total > 0 else 0,
+        'por_palavra': {}
+    }
+    
+    for palavra in palavras_chave:
+        if not df_filtrado.empty:
+            count = int(df_filtrado['Relato'].str.contains(
+                palavra, case=False, na=False
+            ).sum())
+            if count > 0:
+                stats['por_palavra'][palavra] = count
+    
+    return stats
+```
+
+## Metrics Provided
+
+<CardGroup cols={2}>
+  <Card title="Total Records" icon="database">
+    Count of all rows in the original file (before filtering)
+  </Card>
+  <Card title="Filtered Tasks" icon="filter">
+    Number of tasks matching at least one keyword
+  </Card>
+  <Card title="Occurrence Rate" icon="percent">
+    Percentage of filtered tasks relative to total records
+  </Card>
+  <Card title="Per-Keyword Breakdown" icon="list">
+    Individual match count for each keyword used
+  </Card>
+</CardGroup>
+
+## Statistics Structure
+
+The function returns a dictionary with this structure:
+
+```python
+{
+    'total': 1523,              # Total rows in original file
+    'filtrados': 147,           # Rows matching keywords
+    'percentual': 9.7,          # Percentage (1 decimal place)
+    'por_palavra': {            # Per-keyword counts
+        'quebrado': 45,
+        'solicitar peça': 32,
+        'trocar cabo': 28,
+        'danificado': 18,
+        'instalar': 24
+    }
+}
+```
+
+## Calculation Details
+
+### Percentage Formula
+
+<Accordion title="View Percentage Calculation Logic">
+  ```python
+  percentual = round((filtrados/total)*100, 1) if total > 0 else 0
+  ```
+  
+  - Divides filtered count by total count
+  - Multiplies by 100 to get percentage
+  - Rounds to 1 decimal place using `round()`
+  - Returns 0 if total is 0 (prevents division by zero)
+</Accordion>
+
+### Per-Keyword Counting
+
+Each keyword is counted independently using pandas string matching:
+
+```python
+for palavra in palavras_chave:
+    if not df_filtrado.empty:
+        count = int(df_filtrado['Relato'].str.contains(
+            palavra, case=False, na=False
+        ).sum())
+        if count > 0:
+            stats['por_palavra'][palavra] = count
+```
+
+<Note>
+  Keywords with zero matches are excluded from the `por_palavra` dictionary to keep the output clean.
+</Note>
+
+## Important Behaviors
+
+<Warning>
+  **Overlapping Matches**: A single task can match multiple keywords. The sum of per-keyword counts may exceed the total filtered count.
+  
+  Example: A task with "solicitar peça quebrada" matches both "solicitar peça" and "quebrado".
+</Warning>
+
+### Empty DataFrame Handling
+
+The function safely handles empty results:
+
+```python
+if not df_filtrado.empty:
+    # Only calculate per-keyword stats if there are results
+```
+
+This prevents errors when no tasks match any keywords.
+
+## Usage in Application
+
+Statistics are generated during file upload and stored in the Flask session:
+
+```python
+# From app.py:141
+stats = gerar_estatisticas(df_original, resultado_final, palavras_chave)
+session['last_stats'] = stats
+```
+
+### Display in Results Page
+
+The stats dictionary is passed to the `resultado.html` template:
+
+```python
+return render_template('resultado.html', 
+                       table=tabela_html, 
+                       has_results=not resultado_final.empty,
+                       stats=stats,
+                       palavras_utilizadas=palavras_chave)
+```
+
+## Statistics in Exports
+
+<Tabs>
+  <Tab title="Excel Export">
+    Statistics are exported to a dedicated "Estatísticas" sheet:
+    
+    ```python
+    stats_df = pd.DataFrame([
+        ['Total de Registros', stats.get('total', 'N/A')],
+        ['Tarefas Encontradas', stats.get('filtrados', 'N/A')],
+        ['Taxa de Ocorrência (%)', stats.get('percentual', 'N/A')],
+        ['Data de Geração', datetime.now().strftime('%d/%m/%Y %H:%M')]
+    ], columns=['Métrica', 'Valor'])
+    stats_df.to_excel(writer, index=False, sheet_name='Estatísticas')
+    ```
+  </Tab>
+  
+  <Tab title="PDF Export">
+    Statistics appear in a visual dashboard at the top of the PDF:
+    
+    ```html
+    <div class="stats">
+      <div class="stat-box">
+        <div class="stat-number">{stats.get('total', 'N/A')}</div>
+        <div>Total de Registros</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-number">{stats.get('filtrados', 'N/A')}</div>
+        <div>Tarefas Encontradas</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-number">{stats.get('percentual', 'N/A')}%</div>
+        <div>Taxa de Ocorrência</div>
+      </div>
+    </div>
+    ```
+  </Tab>
+</Tabs>
+
+## Data Types
+
+| Field | Type | Example |
+|-------|------|--------|
+| total | int | 1523 |
+| filtrados | int | 147 |
+| percentual | float | 9.7 |
+| por_palavra | dict | `{"quebrado": 45}` |
+
+<Note>
+  The `per_palavra` counts are explicitly converted to int using `int()` to ensure consistent JSON serialization when storing in Flask sessions.
+</Note>
+
+## Performance
+
+Statistics generation is fast even for large datasets:
+
+- Uses vectorized pandas operations
+- Runs in O(n × k) where n = filtered rows, k = number of keywords
+- Typically completes in less than 100ms for files with 10,000 rows

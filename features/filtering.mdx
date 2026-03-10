@@ -1,0 +1,159 @@
+---
+title: 'Keyword Filtering'
+description: 'How the application filters CSV/Excel reports using regex-based keyword matching'
+icon: 'filter'
+---
+
+## Overview
+
+The Extrator de Tarefas Auvo uses keyword-based filtering to identify actionable tasks from CSV and Excel reports. The filtering mechanism uses Python's pandas library with case-insensitive regex pattern matching.
+
+## How It Works
+
+The filtering process is handled by the `processar_arquivo()` function in `app.py:32`:
+
+```python
+def processar_arquivo(file, palavras_chave):
+    """Processa o arquivo CSV ou Excel e retorna os dados filtrados"""
+    filename = file.filename.lower()
+    
+    # Decide como ler o arquivo com base na extensão
+    if filename.endswith('.csv'):
+        df = pd.read_csv(file, skiprows=5)
+    elif filename.endswith(('.xls', '.xlsx')):
+        df = pd.read_excel(file, skiprows=5, engine='openpyxl')
+    else:
+        raise ValueError("Formato de arquivo não suportado")
+
+    regex_busca = '|'.join(palavras_chave)
+    
+    coluna_descricao = 'Relato'
+    necessidades = df[df[coluna_descricao].astype(str).str.contains(
+        regex_busca, case=False, na=False
+    )].copy()
+    
+    colunas_resultado = ['Data', 'Cliente', 'Endereco', 'OS Digital', 'Relato']
+    return df, necessidades[colunas_resultado]
+```
+
+### Key Features
+
+<CardGroup cols={2}>
+  <Card title="Multi-format Support" icon="file-csv">
+    Supports CSV, XLS, and XLSX files with automatic format detection
+  </Card>
+  <Card title="Regex Patterns" icon="code">
+    Uses pipe-separated regex for efficient multi-keyword matching
+  </Card>
+  <Card title="Case-insensitive" icon="text">
+    Matches keywords regardless of capitalization
+  </Card>
+  <Card title="Null-safe" icon="shield">
+    Handles missing values with `na=False` parameter
+  </Card>
+</CardGroup>
+
+## Filtering Logic
+
+<Steps>
+  <Step title="File Format Detection">
+    The system automatically detects file format based on extension (`.csv`, `.xls`, `.xlsx`) and uses the appropriate pandas reader.
+  </Step>
+  <Step title="Skip Header Rows">
+    Both CSV and Excel files skip the first 5 rows (`skiprows=5`) to handle Auvo report formatting.
+  </Step>
+  <Step title="Regex Pattern Construction">
+    Keywords are joined with the pipe operator (`|`) to create a single regex pattern: `solicitar peça|quebrado|trocar cabo`
+  </Step>
+  <Step title="Column Filtering">
+    The 'Relato' (Report) column is searched using `str.contains()` with `case=False` for case-insensitive matching.
+  </Step>
+  <Step title="Result Extraction">
+    Only relevant columns are returned: Data, Cliente, Endereco, OS Digital, Relato
+  </Step>
+</Steps>
+
+## Default Keywords
+
+The application comes with pre-configured keywords optimized for identifying maintenance and repair tasks:
+
+<Accordion title="View Default Keywords">
+  ```python
+  default_keywords = [
+      'solicitar peça',
+      'quebrado',
+      'quebrada',
+      'quebrados',
+      'orçamento',
+      'danificada',
+      'danificado',
+      'danificados',
+      'danificadas',
+      'trocar cabo',
+      'soldar',
+      'trocar',
+      'instalar',
+      'orçamento'
+  ]
+  ```
+  
+  These keywords are defined in `app.py:115` and stored in the Flask session as `custom_keywords`.
+</Accordion>
+
+## Customizing Keywords
+
+<Note>
+  Users can customize keywords through the `/config` route, which accepts comma-separated values and stores them in the session.
+</Note>
+
+### Configuration Route
+
+From `app.py:108`:
+
+```python
+@app.route('/config', methods=['GET', 'POST'])
+def config():
+    if request.method == 'POST':
+        keywords = request.form.get('keywords', '').split(',')
+        session['custom_keywords'] = [k.strip() for k in keywords if k.strip()]
+        return redirect(url_for('index'))
+    
+    current_keywords = session.get('custom_keywords', [...])
+    return render_template('config.html', keywords=', '.join(current_keywords))
+```
+
+## Technical Details
+
+### Pattern Matching Behavior
+
+- **Substring matching**: The regex matches keywords anywhere in the text
+- **No word boundaries**: `trocar` will match "trocar", "trocando", "retrocado"
+- **OR logic**: Any keyword match includes the row in results
+
+### Performance Considerations
+
+<Warning>
+  For very large files (10,000+ rows), the regex matching is performed in-memory using pandas vectorized operations, which is efficient but memory-intensive.
+</Warning>
+
+## Column Output
+
+Filtered results include exactly 5 columns:
+
+| Column | Description |
+|--------|-------------|
+| Data | Task date |
+| Cliente | Client name |
+| Endereco | Service address |
+| OS Digital | Digital work order (with clickable links) |
+| Relato | Task report/description |
+
+## Error Handling
+
+The function raises `ValueError` for unsupported file formats:
+
+```python
+raise ValueError("Formato de arquivo não suportado. Use .csv, .xls ou .xlsx")
+```
+
+This error is caught in the upload route and displayed to the user.

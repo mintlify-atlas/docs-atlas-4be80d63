@@ -1,0 +1,431 @@
+---
+title: Troubleshooting
+description: Common issues and solutions for the Extrator de Tarefas Auvo application
+---
+
+This guide covers common issues you may encounter when using the Extrator de Tarefas Auvo application and how to resolve them.
+
+## File Upload Errors
+
+### Unsupported File Format
+
+<Warning>
+**Error Message:** "Por favor, selecione um arquivo .csv, .xls ou .xlsx"
+
+This error occurs when you attempt to upload a file that is not in a supported format.
+</Warning>
+
+**Solution:**
+
+The application only accepts the following file formats:
+- `.csv` - Comma-separated values
+- `.xls` - Excel 97-2003 format
+- `.xlsx` - Excel 2007+ format
+
+Ensure your Auvo export file has one of these extensions. If you have a different format, convert it using Excel or another spreadsheet application.
+
+### No File Selected Error
+
+<Warning>
+**Error Message:** "Nenhum arquivo selecionado"
+
+This appears when you click "Processar Relatório" without selecting a file.
+</Warning>
+
+**Solution:**
+
+1. Click the "Selecionar arquivo" button on the upload page
+2. Choose your Auvo CSV/Excel file from your computer
+3. Verify the filename appears next to the button before clicking "Processar Relatório"
+
+### Empty File or Missing Columns
+
+<Warning>
+**Error Message:** "Erro ao processar o arquivo: [KeyError or column not found]"
+
+This occurs when the uploaded file doesn't match the expected Auvo export format.
+</Warning>
+
+**Solution:**
+
+The application expects files with these specific columns after skipping 5 header rows:
+- `Data`
+- `Cliente`
+- `Endereco`
+- `OS Digital`
+- `Relato`
+
+<Note>
+The application automatically skips the first 5 rows of your file (app.py:38, app.py:42). Ensure your Auvo export follows this format.
+</Note>
+
+**To verify your file:**
+
+1. Open the CSV/Excel file in a spreadsheet application
+2. Check that row 6 contains the column headers listed above
+3. Ensure the `Relato` column exists and contains task descriptions
+
+## Dependency and Installation Issues
+
+### WeasyPrint Installation Problems
+
+<Warning>
+**Error Message:** PDF download fails or WeasyPrint import errors
+
+WeasyPrint requires system-level dependencies that may not be installed by default.
+</Warning>
+
+**Solution for Windows:**
+
+1. Install GTK3 runtime from: https://github.com/tschoonj/GTK-for-Windows-Runtime-Environment-Installer
+2. Restart your terminal/command prompt
+3. Reinstall WeasyPrint:
+
+```bash
+pip install --force-reinstall weasyprint==66.0
+```
+
+**Solution for Linux (Ubuntu/Debian):**
+
+```bash
+sudo apt-get update
+sudo apt-get install -y \
+    python3-pip \
+    python3-cffi \
+    python3-brotli \
+    libpango-1.0-0 \
+    libpangoft2-1.0-0 \
+    libgdk-pixbuf2.0-0 \
+    libffi-dev \
+    shared-mime-info
+
+pip install weasyprint==66.0
+```
+
+**Solution for macOS:**
+
+```bash
+brew install pango gdk-pixbuf libffi
+pip install weasyprint==66.0
+```
+
+<Tip>
+After installing system dependencies, always restart your terminal and reactivate your virtual environment before running the application.
+</Tip>
+
+### Python Version Incompatibility
+
+<Warning>
+**Error Message:** Package installation fails or import errors
+
+The application requires Python 3.10 or higher.
+</Warning>
+
+**Solution:**
+
+1. Check your Python version:
+
+```bash
+python --version
+```
+
+2. If you have Python < 3.10, install a newer version from https://www.python.org/downloads/
+3. Create a new virtual environment with the correct version:
+
+```bash
+python3.10 -m venv venv
+source venv/bin/activate  # On Windows: .\venv\Scripts\activate
+pip install -r requirements.txt
+```
+
+### Missing Dependencies
+
+<Warning>
+**Error Message:** "ModuleNotFoundError: No module named 'pandas'" or similar
+
+Required packages are not installed in your environment.
+</Warning>
+
+**Solution:**
+
+1. Ensure your virtual environment is activated
+2. Install all dependencies from requirements.txt:
+
+```bash
+pip install -r requirements.txt
+```
+
+3. Verify critical packages are installed:
+
+```bash
+pip list | grep -E "Flask|pandas|weasyprint|openpyxl"
+```
+
+Expected versions (from requirements.txt):
+- Flask==3.1.2
+- pandas==2.3.2
+- weasyprint==66.0
+- openpyxl==3.1.5
+
+## CSV Format and Data Issues
+
+### Pandas Read Errors
+
+<Warning>
+**Error Message:** "Error tokenizing data" or "ParserError"
+
+The CSV file has formatting issues or encoding problems.
+</Warning>
+
+**Solution:**
+
+<Accordion title="Fix encoding issues">
+
+1. Open the CSV file in a text editor that shows encoding (like Notepad++ or VS Code)
+2. Save the file with UTF-8 encoding
+3. Re-upload to the application
+
+Alternatively, open in Excel and "Save As" CSV UTF-8 format.
+
+</Accordion>
+
+<Accordion title="Fix delimiter issues">
+
+If your CSV uses semicolons (;) instead of commas (,):
+
+1. Open the file in Excel
+2. Go to File → Save As
+3. Choose "CSV (Comma delimited) (*.csv)"
+4. Save and re-upload
+
+</Accordion>
+
+<Accordion title="Fix corrupted data">
+
+If you see data corruption errors:
+
+1. Export a fresh copy from Auvo
+2. Don't manually edit the CSV file before uploading
+3. Ensure the file download completed successfully (check file size)
+
+</Accordion>
+
+### No Results Found
+
+<Note>
+**Issue:** File processes successfully but shows 0 tarefas encontradas
+
+This means none of the records in the `Relato` column contain your configured keywords.
+</Note>
+
+**Solution:**
+
+1. Go to the **Configurações** page in the application
+2. Review your current keywords
+3. Add keywords that match the terminology used in your Auvo reports
+4. Keywords are case-insensitive and search for partial matches
+
+**Default keywords** (app.py:115):
+- solicitar peça
+- quebrado, quebrada, quebrados
+- orçamento
+- danificada, danificado, danificados, danificadas
+- trocar cabo
+- soldar
+- trocar
+- instalar
+
+<Tip>
+Use the comma-separated format when adding keywords: `keyword1, keyword2, keyword3`
+</Tip>
+
+### Excel Engine Errors
+
+<Warning>
+**Error Message:** "Missing optional dependency 'openpyxl'"
+
+The Excel engine is not installed.
+</Warning>
+
+**Solution:**
+
+```bash
+pip install openpyxl==3.1.5
+```
+
+This dependency is required for reading `.xlsx` files (app.py:42).
+
+## Session and Temporary File Issues
+
+### Results Expired Error
+
+<Warning>
+**Error Message:** "Os resultados expiraram. Por favor, processe o arquivo novamente."
+
+This occurs when attempting to download results after the session has expired or been cleared.
+</Warning>
+
+**Solution:**
+
+The application stores filtered results in temporary files using session data (app.py:145-152). Sessions can expire when:
+
+- Your browser session ends
+- You clear browser cookies
+- The server restarts
+- You switch browsers or use incognito mode
+
+<Tip>
+**Best Practice:** Download your Excel/PDF reports immediately after processing. Don't rely on the session persisting between visits.
+</Tip>
+
+To process the file again:
+1. Return to the home page
+2. Upload your CSV/Excel file again
+3. Click "Processar Relatório"
+4. Download the results immediately
+
+### Temporary Files Accumulating
+
+<Note>
+**Issue:** The `temp` folder grows large over time
+
+Each upload creates a temporary CSV file with a unique UUID filename (app.py:145).
+</Note>
+
+**Solution:**
+
+Periodically clean the `temp` folder:
+
+```bash
+# From the application root directory
+rm -f temp/*.csv  # Linux/macOS
+del /Q temp\*.csv  # Windows
+```
+
+<Tip>
+Consider setting up a cron job or scheduled task to automatically clean temporary files older than 24 hours.
+</Tip>
+
+### Missing SECRET_KEY Error
+
+<Warning>
+**Error Message:** Application fails to start or session errors
+
+The `.env` file is missing or doesn't contain a SECRET_KEY.
+</Warning>
+
+**Solution:**
+
+1. Create a `.env` file in the project root directory
+2. Generate a secure secret key:
+
+```python
+python -c "import secrets; print('SECRET_KEY=' + secrets.token_hex(32))"
+```
+
+3. Copy the output to your `.env` file:
+
+```bash
+SECRET_KEY=your_generated_key_here
+```
+
+4. Restart the application
+
+<Note>
+The SECRET_KEY is required for Flask session management (app.py:15). Never commit this file to version control.
+</Note>
+
+## Browser and Display Issues
+
+### Table Not Displaying Correctly
+
+**Solution:**
+
+Ensure JavaScript is enabled in your browser. The results table uses dynamic search functionality that requires JavaScript.
+
+### Download Buttons Not Working
+
+**Solution:**
+
+1. Check your browser's pop-up blocker settings
+2. Ensure downloads are not blocked for localhost
+3. Check browser console for JavaScript errors (F12 → Console tab)
+
+### Links in OS Digital Column Not Clickable
+
+<Note>
+The `OS Digital` column should contain clickable URLs (app.py:160).
+</Note>
+
+**Solution:**
+
+If links aren't clickable:
+
+1. Verify the URLs in your CSV start with `http://` or `https://`
+2. The `criar_links` function only converts strings starting with "http" (app.py:28)
+3. Update your Auvo export or source data to include complete URLs
+
+## Performance Issues
+
+### Slow Processing for Large Files
+
+<Tip>
+The application loads the entire CSV into memory using pandas. Very large files (>100MB) may take time to process.
+</Tip>
+
+**Solutions:**
+
+- Split large exports into smaller date ranges in Auvo
+- Increase available system RAM
+- Process files during off-peak hours
+- Close other applications to free up memory
+
+### PDF Generation Timeout
+
+<Warning>
+**Issue:** PDF download times out or fails for large result sets
+
+WeasyPrint can be slow when rendering tables with hundreds of rows (app.py:257).
+</Warning>
+
+**Solution:**
+
+1. Use Excel export instead for large datasets
+2. Filter results using more specific keywords to reduce row count
+3. Increase the Flask timeout in app.py if running in production
+
+## Getting Additional Help
+
+<Note>
+If you encounter errors not covered in this guide:
+
+1. Check the terminal/console where you ran `python app.py`
+2. Look for error messages and stack traces
+3. Error logging is printed to stdout (app.py:175)
+4. Share the error message when seeking help
+</Note>
+
+**Common debugging steps:**
+
+```bash
+# Verify Python version
+python --version
+
+# Check installed packages
+pip list
+
+# Verify virtual environment is activated
+which python  # Linux/macOS
+where python  # Windows
+
+# Test pandas can read your file
+python -c "import pandas as pd; print(pd.read_csv('your_file.csv', skiprows=5).columns)"
+```
+
+<Tip>
+When reporting issues, always include:
+- Python version
+- Operating system
+- Full error message
+- Steps to reproduce the problem
+</Tip>

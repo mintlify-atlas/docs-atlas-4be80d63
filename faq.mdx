@@ -1,0 +1,520 @@
+---
+title: FAQ
+description: Frequently asked questions about the Extrator de Tarefas Auvo application
+---
+
+Find answers to common questions about using the Extrator de Tarefas Auvo application.
+
+## File Formats and Compatibility
+
+<Accordion title="What file formats are supported?">
+
+The application supports three file formats from Auvo exports:
+
+- **CSV** (`.csv`) - Comma-separated values files
+- **Excel 97-2003** (`.xls`) - Legacy Excel format
+- **Excel 2007+** (`.xlsx`) - Modern Excel format
+
+All formats are processed using pandas, with CSV files read using `pd.read_csv()` and Excel files using `pd.read_excel()` with the openpyxl engine (app.py:37-42).
+
+**Note:** All three formats are treated equally - the application automatically detects the format based on file extension.
+
+</Accordion>
+
+<Accordion title="Does the CSV file need to be in a specific format?">
+
+Yes. The application expects Auvo export files with a specific structure:
+
+1. **First 5 rows are skipped** - These typically contain Auvo export metadata
+2. **Row 6 must contain column headers** with these exact names:
+   - `Data`
+   - `Cliente`
+   - `Endereco`
+   - `OS Digital`
+   - `Relato`
+
+3. **The `Relato` column** must contain task descriptions where keywords will be searched
+
+The application filters based on the `Relato` column and returns the five columns listed above in the results (app.py:38, app.py:49-53).
+
+</Accordion>
+
+<Accordion title="Can I use files from sources other than Auvo?">
+
+Yes, as long as your file:
+
+- Is in CSV, XLS, or XLSX format
+- Has 5 rows of headers/metadata before the column names (or adjust the file accordingly)
+- Contains the required columns: `Data`, `Cliente`, `Endereco`, `OS Digital`, and `Relato`
+- Has searchable text in the `Relato` column
+
+If your source system uses different column names, you'll need to rename them to match the expected format before uploading.
+
+</Accordion>
+
+<Accordion title="What encoding should my CSV file use?">
+
+Pandas (the data processing library) handles most common encodings automatically, including:
+
+- UTF-8 (recommended)
+- Latin-1 (ISO-8859-1)
+- Windows-1252
+
+If you encounter encoding errors, save your CSV file as **UTF-8** using Excel, Notepad++, or another text editor.
+
+</Accordion>
+
+## Keywords and Search Functionality
+
+<Accordion title="How do I customize the search keywords?">
+
+You can customize keywords through the **Configurações** page:
+
+1. Navigate to the configuration page from the main menu
+2. Enter your keywords as a comma-separated list
+3. Click save
+4. Your custom keywords are stored in the session and will be used for all subsequent file uploads
+
+Example format:
+```
+solicitar peça, quebrado, trocar cabo, instalação, manutenção
+```
+
+Keywords are stored in the session and persist until you clear cookies or close your browser (app.py:111-112).
+
+</Accordion>
+
+<Accordion title="What are the default keywords?">
+
+The application comes with these default keywords designed for maintenance and repair tasks (app.py:115):
+
+- solicitar peça
+- quebrado, quebrada, quebrados
+- orçamento
+- danificada, danificado, danificados, danificadas
+- trocar cabo
+- soldar
+- trocar
+- instalar
+
+These defaults target common action-requiring scenarios in field service reports.
+
+</Accordion>
+
+<Accordion title="Is the keyword search case-sensitive?">
+
+No. The search is **case-insensitive** and finds partial matches within the `Relato` column text (app.py:50).
+
+For example:
+- Keyword `"quebrado"` will match "QUEBRADO", "Quebrado", "equipamento quebrado", etc.
+- Keyword `"instalar"` will match "instalação", "instalar", "precisa instalar", etc.
+
+The search uses pandas' `str.contains()` method with `case=False` parameter.
+
+</Accordion>
+
+<Accordion title="Can I search for phrases with spaces?">
+
+Yes! The application fully supports multi-word keywords.
+
+Examples:
+- `"solicitar peça"` - searches for this exact phrase
+- `"trocar cabo"` - finds records mentioning cable replacement
+- `"equipamento danificado"` - locates damaged equipment mentions
+
+When entering multiple phrase keywords, separate them with commas:
+```
+solicitar peça, trocar cabo, equipamento danificado, sem energia
+```
+
+</Accordion>
+
+<Accordion title="How does the application count keyword matches?">
+
+The statistics panel shows:
+
+1. **Total de Registros** - All rows in the uploaded file (after skipping 5 header rows)
+2. **Tarefas Encontradas** - Rows where the `Relato` column contains at least one keyword
+3. **Taxa de Ocorrência** - Percentage of records matching (app.py:55-73)
+
+Additionally, the stats include a breakdown by keyword showing how many times each individual keyword appeared in the filtered results (app.py:67-71).
+
+**Note:** If a row contains multiple keywords, it's only counted once in "Tarefas Encontradas" but appears in the per-keyword breakdown multiple times.
+
+</Accordion>
+
+## Export and Download Features
+
+<Accordion title="What export formats are available?">
+
+The application offers two export formats:
+
+1. **Excel (.xlsx)** - Includes two sheets:
+   - `Tarefas Encontradas` - Filtered results with all five columns
+   - `Estatísticas` - Summary metrics and generation timestamp
+   
+2. **PDF** - Formatted report with:
+   - Header with generation date
+   - Statistics dashboard
+   - Keywords used section
+   - Results table with clickable links
+
+Both exports use the filtered data stored in temporary session files (app.py:178-263).
+
+</Accordion>
+
+<Accordion title="Is there a limit on how many rows can be exported?">
+
+No explicit limit exists in the code. The application will export all filtered results regardless of size.
+
+**However, practical limitations apply:**
+
+- **Excel exports** - Can handle very large datasets (tested up to 1M+ rows with pandas/openpyxl)
+- **PDF exports** - May become slow or timeout with thousands of rows due to WeasyPrint rendering
+
+<Tip>
+For result sets over 1,000 rows, we recommend using Excel export instead of PDF for better performance.
+</Tip>
+
+</Accordion>
+
+<Accordion title="Can I download results later, or do I need to download immediately?">
+
+Results are stored in temporary session files, which means:
+
+**You can download multiple times** during the same session, but results will be lost when:
+- You close your browser
+- Your session expires
+- You clear browser cookies
+- The server restarts
+
+When results expire, you'll see: *"Os resultados expiraram. Por favor, processe o arquivo novamente."* (app.py:183, app.py:211)
+
+<Warning>
+**Best Practice:** Download both Excel and PDF versions immediately after processing if you need them.
+</Warning>
+
+</Accordion>
+
+<Accordion title="Are links in the OS Digital column clickable in exports?">
+
+Yes, but with differences by format:
+
+**Excel exports:**
+- URLs are preserved as text
+- Excel may auto-detect and hyperlink them
+- You can manually convert to hyperlinks in Excel if needed
+
+**PDF exports:**
+- URLs are rendered as clickable HTML links (app.py:218, app.py:238)
+- Links open in a new tab when clicked
+- Only URLs starting with `http://` or `https://` are converted to links (app.py:28-29)
+
+**Web view:**
+- Links are fully clickable in the results table
+- Open in new browser tabs via `target="_blank"` attribute
+
+</Accordion>
+
+## Session and Data Persistence
+
+<Accordion title="How long does the application remember my custom keywords?">
+
+Custom keywords are stored in the **Flask session**, which persists as long as:
+
+- Your browser remains open
+- You don't clear cookies
+- The session cookie doesn't expire (default is until browser closes)
+
+When you close your browser or clear cookies, keywords reset to the defaults.
+
+<Note>
+If you want permanent custom keywords, you would need to modify the application code to store them in a configuration file or database (not currently supported).
+</Note>
+
+</Accordion>
+
+<Accordion title="Does the application store my uploaded files permanently?">
+
+No. Here's what happens to your files:
+
+1. **Upload** - Your original file is processed in memory (app.py:140)
+2. **Temporary storage** - Filtered results are saved to `temp/` folder with a unique UUID filename (app.py:145-149)
+3. **Session reference** - Only the temporary filename is stored in the session (app.py:152)
+4. **Automatic cleanup** - Files remain until manually deleted
+
+<Warning>
+The application does NOT automatically delete temporary files. The `temp/` folder will accumulate files over time. Periodic manual cleanup is recommended.
+</Warning>
+
+To clean up:
+```bash
+rm temp/*.csv  # Linux/macOS
+del temp\*.csv  # Windows
+```
+
+</Accordion>
+
+<Accordion title="Can I view my processing history?">
+
+Yes! The application maintains a **session-based history** of the last 10 processed files (app.py:75-84).
+
+Access it through the **Histórico** page, which shows:
+- Original filename
+- Processing date and time
+- Number of tasks found
+- Total records processed
+
+Like custom keywords, this history is session-based and cleared when you close your browser.
+
+</Accordion>
+
+<Accordion title="Is my data secure? Can others see my uploaded files?">
+
+Security considerations:
+
+**Session isolation:**
+- Each user session has a unique SECRET_KEY-signed cookie
+- Temporary files use random UUID names (app.py:145)
+- Other users cannot access your session data or files
+
+**Data persistence:**
+- Original uploads are NOT saved to disk
+- Only filtered results are temporarily stored
+- No database or permanent storage is used
+
+**Recommendations for production:**
+- Use HTTPS to encrypt data in transit
+- Set appropriate file system permissions on the `temp/` folder
+- Implement automatic temporary file cleanup
+- Use environment-specific SECRET_KEY (never commit `.env` to version control)
+- Consider adding authentication for multi-user deployments
+
+<Warning>
+The default setup (app.py:266) runs with `debug=True`, which is NOT secure for production use. Always set `debug=False` in production environments.
+</Warning>
+
+</Accordion>
+
+## Browser Compatibility
+
+<Accordion title="Which browsers are supported?">
+
+The application uses standard web technologies and works with all modern browsers:
+
+- **Chrome/Edge** (recommended) - Version 90+
+- **Firefox** - Version 88+
+- **Safari** - Version 14+
+- **Opera** - Version 76+
+
+The interface uses Bootstrap 5 for styling, which has excellent cross-browser compatibility.
+
+**Required browser features:**
+- JavaScript enabled (for table search and interactivity)
+- Cookies enabled (for session management)
+- File upload support
+
+</Accordion>
+
+<Accordion title="Does the application work on mobile devices?">
+
+Yes, the interface is responsive thanks to Bootstrap 5. However:
+
+**Mobile browsers:**
+- File uploads work on iOS Safari and Android Chrome
+- Table viewing is functional but may require horizontal scrolling
+- Downloads work on all major mobile browsers
+
+**Recommended usage:**
+- **Desktop/laptop** - Full functionality, best experience
+- **Tablet** - Good for viewing and basic uploads
+- **Phone** - Works but challenging for large tables
+
+<Tip>
+For the best experience processing large CSV files and viewing results, use a desktop or laptop computer.
+</Tip>
+
+</Accordion>
+
+<Accordion title="Can I use the application offline?">
+
+No. The application requires:
+
+- An active Flask server running (`python app.py`)
+- Network connection to localhost (127.0.0.1:5000)
+- Browser access to the running server
+
+For offline use, you would need to:
+1. Run the Flask server locally on your machine
+2. Access it via `http://127.0.0.1:5000` in your browser
+3. Process files while the server is running
+
+This is "offline" in the sense of not requiring internet, but you still need the local server running.
+
+</Accordion>
+
+## Technical Questions
+
+<Accordion title="What Python version is required?">
+
+The application requires **Python 3.10 or higher** (as documented in README.md).
+
+This requirement comes from dependencies like pandas 2.3.2 and numpy 2.3.2, which require modern Python versions.
+
+To check your version:
+```bash
+python --version
+```
+
+If you have an older version, download Python 3.10+ from https://www.python.org/downloads/
+
+</Accordion>
+
+<Accordion title="Can I run this application in production?">
+
+The current setup (app.py:266) uses Flask's development server with `debug=True`, which is **not suitable for production**.
+
+For production deployment, you should:
+
+1. **Change debug mode:**
+   ```python
+   if __name__ == '__main__':
+       app.run(debug=False)
+   ```
+
+2. **Use a production WSGI server:**
+   - Gunicorn (Linux/macOS): `gunicorn app:app`
+   - Waitress (Windows): `waitress-serve --listen=*:5000 app:app`
+
+3. **Add security measures:**
+   - File upload size limits
+   - Rate limiting
+   - HTTPS/SSL certificates
+   - Authentication/authorization
+   - CSRF protection
+
+4. **Implement file cleanup:**
+   - Cron job to delete old temp files
+   - Automatic cleanup on session expiration
+
+5. **Set environment variables properly:**
+   - Strong SECRET_KEY
+   - Production database (if adding one)
+
+</Accordion>
+
+<Accordion title="How can I modify the columns that are filtered and displayed?">
+
+The columns are hardcoded in `app.py:52-53`. To modify:
+
+1. **Change the search column** (currently `Relato`):
+   ```python
+   coluna_descricao = 'YourColumnName'  # Line 49
+   ```
+
+2. **Change result columns** (currently 5 columns):
+   ```python
+   colunas_resultado = ['Column1', 'Column2', 'Column3']  # Line 52
+   ```
+
+3. **Adjust header skip rows** (currently 5):
+   ```python
+   df = pd.read_csv(file, skiprows=X)  # Line 38, change X
+   df = pd.read_excel(file, skiprows=X, engine='openpyxl')  # Line 42
+   ```
+
+Restart the application after making changes.
+
+</Accordion>
+
+<Accordion title="Can I integrate this with other systems via API?">
+
+The application currently only provides a web interface. To add API endpoints:
+
+1. **Add JSON response routes:**
+   ```python
+   @app.route('/api/process', methods=['POST'])
+   def api_process():
+       # Process file and return JSON
+       return jsonify(results)
+   ```
+
+2. **Use Flask-RESTful or Flask-RESTX** for structured API development
+
+3. **Implement authentication** (JWT, API keys, etc.)
+
+4. **Add CORS headers** if calling from different domains:
+   ```python
+   from flask_cors import CORS
+   CORS(app)
+   ```
+
+API integration requires code modifications and is not available out of the box.
+
+</Accordion>
+
+## Getting Started
+
+<Accordion title="I'm new to this application. Where should I start?">
+
+Follow this quick start guide:
+
+1. **Install dependencies** (see Installation guide)
+   ```bash
+   python -m venv venv
+   source venv/bin/activate
+   pip install -r requirements.txt
+   ```
+
+2. **Configure environment**
+   - Create `.env` file with SECRET_KEY
+   - Create `temp/` folder
+
+3. **Start the application**
+   ```bash
+   python app.py
+   ```
+
+4. **Open in browser**: http://127.0.0.1:5000
+
+5. **Upload a test file**
+   - Use a small Auvo CSV export (< 1000 rows)
+   - Process with default keywords
+
+6. **Explore features**
+   - View statistics
+   - Download Excel/PDF
+   - Customize keywords in Configurações
+   - Check Histórico
+
+<Tip>
+Start with a small test file to familiarize yourself with the interface before processing large production exports.
+</Tip>
+
+</Accordion>
+
+<Accordion title="Where can I get help if I'm stuck?">
+
+If you encounter issues:
+
+1. **Check the Troubleshooting guide** - Covers common problems and solutions
+2. **Review error messages** - Look at the terminal where you ran `python app.py`
+3. **Read this FAQ** - Many questions are answered here
+4. **Verify your setup**:
+   ```bash
+   python --version  # Should be 3.10+
+   pip list  # Verify all packages installed
+   ls temp/  # Check temp folder exists
+   ```
+
+5. **Enable debug output** - The application runs with `debug=True` by default, showing detailed errors
+
+<Note>
+When seeking help, always include:
+- Python version
+- Operating system
+- Full error message
+- Steps to reproduce
+</Note>
+
+</Accordion>

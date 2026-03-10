@@ -1,0 +1,140 @@
+---
+title: 'Uploading Files'
+description: 'Learn how to upload CSV and Excel files from Auvo for processing'
+icon: 'upload'
+---
+
+## Overview
+
+The Extrator de Tarefas Auvo application processes CSV and Excel files exported from Auvo. This guide explains how to prepare and upload your files for task extraction.
+
+## Supported File Formats
+
+The application accepts the following file formats:
+
+- **CSV files** (`.csv`)
+- **Excel 97-2003** (`.xls`)
+- **Excel 2007+** (`.xlsx`)
+
+<Note>
+The application automatically skips the first 5 rows of your file, as Auvo reports typically contain header information in these rows.
+</Note>
+
+## File Requirements
+
+### Required Columns
+
+Your Auvo export must contain the following columns:
+
+- **Data** - Date of the service order
+- **Cliente** - Client name
+- **Endereco** - Service address
+- **OS Digital** - Digital service order number/link
+- **Relato** - Service report description (this is where keywords are searched)
+
+<Info>
+The application specifically searches for keywords in the **Relato** column to identify tasks that require action.
+</Info>
+
+## How to Upload Files
+
+<Steps>
+  <Step title="Export from Auvo">
+    Export your service order report from Auvo in CSV or Excel format. Ensure the export includes all required columns mentioned above.
+  </Step>
+
+  <Step title="Navigate to Home Page">
+    Open the Extrator de Tarefas Auvo application in your browser. You'll see the main upload interface with a file selection button.
+    
+    ![Upload interface with file selection button and process button]
+  </Step>
+
+  <Step title="Select Your File">
+    Click on the file input field labeled **"Arquivo do Auvo"** and select your CSV or Excel file from your computer.
+    
+    <Tip>
+    The file picker will automatically filter to show only `.csv`, `.xls`, and `.xlsx` files.
+    </Tip>
+  </Step>
+
+  <Step title="Process the Report">
+    Click the **"Processar Relatório"** button to upload and process your file. The application will:
+    
+    - Read the file contents
+    - Skip the first 5 header rows
+    - Search for configured keywords in the "Relato" column
+    - Generate statistics and filter results
+  </Step>
+
+  <Step title="View Results">
+    After processing completes, you'll be redirected to the results page showing all tasks that match your configured keywords.
+  </Step>
+</Steps>
+
+## Upload Process Details
+
+### Backend Processing
+
+When you upload a file, the application performs the following operations (handled by the `/upload` route in `app.py:124`):
+
+1. **File Validation** - Checks that a file was selected and has a valid extension
+2. **Format Detection** - Automatically detects whether the file is CSV or Excel
+3. **Data Loading** - Reads the file using pandas, skipping the first 5 rows
+4. **Keyword Filtering** - Searches the "Relato" column for configured keywords
+5. **Statistics Generation** - Calculates total records, matches found, and occurrence rate
+6. **Temporary Storage** - Saves filtered results to a temporary CSV file for export functionality
+
+### File Size Considerations
+
+<Note>
+There is no explicit file size limit, but very large files (>10MB) may take longer to process. The application loads the entire file into memory for processing.
+</Note>
+
+## Troubleshooting Upload Issues
+
+### Error: "Nenhum arquivo selecionado"
+
+This error appears if you click "Processar Relatório" without selecting a file first. Make sure to choose a file before submitting.
+
+### Error: "Por favor, selecione um arquivo .csv, .xls ou .xlsx"
+
+You've selected a file with an unsupported format. Only CSV and Excel files are accepted.
+
+### Error: "Erro ao processar o arquivo"
+
+This general error can occur for several reasons:
+
+- The file structure doesn't match the expected Auvo format
+- Required columns (Data, Cliente, Endereco, OS Digital, Relato) are missing
+- The file is corrupted or cannot be read
+- The Excel file is password-protected
+
+<Tip>
+If you encounter processing errors, verify that your file is a genuine Auvo export with all required columns intact.
+</Tip>
+
+## File Persistence
+
+Uploaded files are stored temporarily in the server's `temp/` folder as CSV files. These temporary files:
+
+- Have unique UUID-based filenames to prevent conflicts
+- Are used for generating Excel and PDF exports
+- Remain available during your browser session
+- Should be re-uploaded if your session expires
+
+<Info>
+The application stores only the filename in your session, not the actual file data, to keep session storage efficient.
+</Info>
+
+## Next Steps
+
+After successfully uploading your file:
+
+1. [View your results](/guide/viewing-results) in the interactive table
+2. [Configure keywords](/guide/configuring-keywords) to refine your search
+3. [Export reports](/guide/exporting-reports) to Excel or PDF format
+
+## Related Routes
+
+- `POST /upload` - Main file upload handler (`app.py:124`)
+- `GET /` - Home page with upload form (`app.py:104`)

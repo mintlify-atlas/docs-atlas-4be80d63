@@ -1,0 +1,434 @@
+---
+title: 'Exporting Reports'
+description: 'Export your filtered task results to Excel and PDF formats'
+icon: 'download'
+---
+
+## Overview
+
+After processing your Auvo file, you can export the filtered results to Excel or PDF format. Both formats include your extracted tasks and statistical summaries, making it easy to share or archive your findings.
+
+## Export Options
+
+The application provides two export formats:
+
+<CardGroup cols={2}>
+  <Card title="Excel Export" icon="file-excel" color="#2ecc71">
+    Multi-sheet workbook with detailed data and statistics, ideal for further analysis
+  </Card>
+  
+  <Card title="PDF Export" icon="file-pdf" color="#e74c3c">
+    Professional formatted report with visual statistics, perfect for printing or sharing
+  </Card>
+</CardGroup>
+
+## Exporting to Excel
+
+### How to Export
+
+<Steps>
+  <Step title="Process Your File">
+    Upload and process your Auvo file to generate results. You must have results before exporting.
+  </Step>
+
+  <Step title="Click Excel Button">
+    On the results page, locate the export buttons in the header. Click the green **"Excel"** button.
+    
+    ![Excel export button in results page header]
+  </Step>
+
+  <Step title="Download Starts">
+    Your browser will immediately download a file named `relatorio_filtrado.xlsx`.
+  </Step>
+
+  <Step title="Open in Excel">
+    Open the downloaded file in Microsoft Excel, LibreOffice Calc, or Google Sheets.
+  </Step>
+</Steps>
+
+### Excel File Structure
+
+The Excel export contains **two sheets**:
+
+#### Sheet 1: Tarefas Encontradas
+
+Contains all filtered tasks with the following columns:
+
+| Column | Description |
+|--------|-------------|
+| Data | Service order date |
+| Cliente | Client name |
+| Endereco | Service address |
+| OS Digital | Service order URL |
+| Relato | Service report description |
+
+<Info>
+This sheet contains the exact same data displayed in the results table on the web interface.
+</Info>
+
+#### Sheet 2: Estatísticas
+
+Contains summary statistics:
+
+| Métrica | Valor |
+|---------|-------|
+| Total de Registros | 250 |
+| Tarefas Encontradas | 45 |
+| Taxa de Ocorrência (%) | 18.0 |
+| Data de Geração | 10/03/2026 14:30 |
+
+### Backend Implementation
+
+The Excel export is handled by the `/download/excel` route (`app.py:178`):
+
+```python
+@app.route('/download/excel')
+def download_excel():
+    # Retrieve filtered data from temporary CSV file
+    df = get_dataframe_from_temp_file()
+    if df is None:
+        return redirect(url_for('index', error="Os resultados expiraram..."))
+    
+    stats = session.get('last_stats', {})
+    
+    # Create Excel file in memory
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        # Write tasks to first sheet
+        df.to_excel(writer, index=False, sheet_name='Tarefas Encontradas')
+        
+        # Write statistics to second sheet
+        stats_df = pd.DataFrame([
+            ['Total de Registros', stats.get('total', 'N/A')],
+            ['Tarefas Encontradas', stats.get('filtrados', 'N/A')],
+            ['Taxa de Ocorrência (%)', stats.get('percentual', 'N/A')],
+            ['Data de Geração', datetime.now().strftime('%d/%m/%Y %H:%M')]
+        ], columns=['Métrica', 'Valor'])
+        stats_df.to_excel(writer, index=False, sheet_name='Estatísticas')
+    
+    output.seek(0)
+    return Response(output, mimetype="application/vnd.openxmlformats-officedocument.spreadsheet.sheet",
+                    headers={"Content-Disposition": "attachment;filename=relatorio_filtrado.xlsx"})
+```
+
+<Note>
+The Excel export uses the `openpyxl` library, which is specified in the project's requirements.
+</Note>
+
+### Use Cases for Excel Export
+
+- **Data Analysis**: Pivot tables, charts, and formulas
+- **Filtering**: Apply additional custom filters
+- **Integration**: Import into other business systems
+- **Sharing**: Send to colleagues who prefer spreadsheet format
+- **Archiving**: Long-term storage of results
+
+<Tip>
+Excel files preserve the exact data values, making them ideal when you need to perform calculations or further manipulations.
+</Tip>
+
+## Exporting to PDF
+
+### How to Export
+
+<Steps>
+  <Step title="Process Your File">
+    Ensure you have processed a file and have results displayed.
+  </Step>
+
+  <Step title="Click PDF Button">
+    On the results page, click the red **"PDF"** button next to the Excel button.
+    
+    ![PDF export button in results page header]
+  </Step>
+
+  <Step title="Download Starts">
+    Your browser will download a file named `relatorio_filtrado.pdf`.
+  </Step>
+
+  <Step title="Open PDF">
+    Open the file in any PDF reader (Adobe Acrobat, Preview, Chrome, etc.).
+  </Step>
+</Steps>
+
+### PDF Report Structure
+
+The PDF report includes:
+
+#### 1. Header Section
+
+```
+Relatório de Tarefas com Ação Necessária
+Gerado em: 10/03/2026 às 14:30
+```
+
+#### 2. Statistics Dashboard
+
+Visual stat boxes showing:
+
+- **Total de Registros**: 250
+- **Tarefas Encontradas**: 45
+- **Taxa de Ocorrência**: 18.0%
+
+#### 3. Keywords Section
+
+Highlighted box showing all keywords used:
+
+```
+⚠️ Palavras-chave utilizadas:
+quebrado, solicitar peça, trocar cabo, orçamento, danificado
+```
+
+#### 4. Results Table
+
+Full table with all filtered tasks, including:
+
+- Data
+- Cliente
+- Endereco
+- OS Digital (with clickable links)
+- Relato
+
+<Info>
+The PDF is formatted for printing, with responsive styling that adapts to page size.
+</Info>
+
+### PDF Styling
+
+The PDF uses custom CSS for professional appearance:
+
+```css
+- Font: Arial, sans-serif
+- Header: Blue (#0056b3) with light gray background
+- Stats: Color-coded boxes with blue highlights
+- Keywords: Yellow highlight with orange border
+- Table: Striped rows, 10px font size for readability
+- Links: Blue, clickable URLs
+```
+
+### Backend Implementation
+
+The PDF export is handled by the `/download/pdf` route (`app.py:206`) using WeasyPrint:
+
+```python
+@app.route('/download/pdf')
+def download_pdf():
+    # Retrieve filtered data
+    df = get_dataframe_from_temp_file()
+    if df is None:
+        return redirect(url_for('index', error="Os resultados expiraram..."))
+    
+    stats = session.get('last_stats', {})
+    palavras_utilizadas = session.get('custom_keywords', [])
+    
+    # Convert OS Digital URLs to HTML links
+    df_render = df.copy()
+    if not df.empty:
+        df_render['OS Digital'] = df_render['OS Digital'].apply(criar_links)
+    
+    # Generate HTML table
+    tabela_html = df_render.to_html(index=False, escape=False, classes="tabela-pdf")
+    
+    # Build complete HTML document with styling
+    full_html = f"""
+    <html>
+      <head>
+        <meta charset="utf-8">
+        <style>/* CSS styling here */</style>
+      </head>
+      <body>
+        <div class="header">...</div>
+        <div class="stats">...</div>
+        <div class="palavras-chave">...</div>
+        {tabela_html}
+      </body>
+    </html>
+    """
+    
+    # Convert HTML to PDF
+    pdf = HTML(string=full_html).write_pdf()
+    
+    return Response(pdf, mimetype="application/pdf",
+                    headers={"Content-Disposition": "attachment;filename=relatorio_filtrado.pdf"})
+```
+
+<Note>
+PDF generation uses the WeasyPrint library, which renders HTML/CSS to PDF format.
+</Note>
+
+### Use Cases for PDF Export
+
+- **Presentations**: Share in meetings or reports
+- **Printing**: Physical copies for field technicians
+- **Archiving**: Long-term read-only storage
+- **Email**: Easy to attach and view on any device
+- **Documentation**: Include in project documentation
+
+<Tip>
+PDFs are ideal when you want a fixed, professional-looking report that displays consistently across all devices.
+</Tip>
+
+## Comparing Export Formats
+
+| Feature | Excel | PDF |
+|---------|-------|-----|
+| File Size | Smaller | Larger |
+| Editability | Editable | Read-only |
+| Formatting | Basic | Professional |
+| Multiple Sheets | ✅ Yes | ❌ Single document |
+| Clickable Links | ✅ Yes | ✅ Yes |
+| Charts/Graphs | Manual creation | Pre-formatted stats |
+| Best For | Analysis | Sharing/Printing |
+
+## Handling Export Errors
+
+### Error: "Os resultados expiraram"
+
+This error appears when:
+
+- Your session has expired (browser closed or timed out)
+- The temporary results file was deleted
+- You're trying to export without processing a file first
+
+**Solution**: Re-upload and process your file to generate new results.
+
+### Empty Results Export
+
+If you export when no tasks were found:
+
+- **Excel**: The "Tarefas Encontradas" sheet will be empty (headers only)
+- **PDF**: Displays "Nenhuma tarefa encontrada" instead of a table
+
+<Info>
+Statistics will still show total records processed, even if no matches were found.
+</Info>
+
+### Download Doesn't Start
+
+If clicking the export button does nothing:
+
+1. Check that JavaScript is enabled
+2. Disable pop-up blockers for this site
+3. Try a different browser
+4. Check browser console for errors
+
+### PDF Looks Incorrect
+
+If the PDF has formatting issues:
+
+- Ensure you're using a modern PDF reader
+- Try re-exporting (temporary rendering issue)
+- Very long addresses or descriptions may cause layout issues
+
+## Export File Naming
+
+Both exports use static filenames:
+
+- **Excel**: `relatorio_filtrado.xlsx`
+- **PDF**: `relatorio_filtrado.pdf`
+
+<Tip>
+If you export multiple times, your browser will either overwrite the previous file or append a number (e.g., `relatorio_filtrado (1).pdf`), depending on your browser settings.
+</Tip>
+
+### Custom Naming (Future Enhancement)
+
+Currently, filenames are hardcoded. A potential enhancement would be:
+
+```python
+filename = f"relatorio_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+# Example: relatorio_20260310_143045.xlsx
+```
+
+## Technical Details
+
+### Data Source
+
+Both exports retrieve data from the same source:
+
+```python
+def get_dataframe_from_temp_file():
+    temp_filename = session.get('temp_filename')
+    if not temp_filename:
+        return None
+    
+    file_path = os.path.join(TEMP_FOLDER, temp_filename)
+    if os.path.exists(file_path):
+        return pd.read_csv(file_path)
+    return None
+```
+
+This ensures:
+
+- ✅ Consistent data between web view and exports
+- ✅ Memory efficiency (not stored in session)
+- ✅ Support for large datasets
+
+### Response Headers
+
+Both exports use Flask's `Response` object with proper MIME types:
+
+**Excel:**
+```python
+mimetype="application/vnd.openxmlformats-officedocument.spreadsheet.sheet"
+Content-Disposition: attachment;filename=relatorio_filtrado.xlsx
+```
+
+**PDF:**
+```python
+mimetype="application/pdf"
+Content-Disposition: attachment;filename=relatorio_filtrado.pdf
+```
+
+The `attachment` disposition forces the browser to download rather than display inline.
+
+### Performance Considerations
+
+- **Excel exports** are typically faster (direct pandas conversion)
+- **PDF exports** take longer due to HTML rendering and styling
+- Large datasets (>1000 rows) may take several seconds to export
+- All processing is synchronous (browser waits for completion)
+
+<Note>
+For very large files (>10,000 rows), consider implementing background job processing or pagination.
+</Note>
+
+## Best Practices
+
+### When to Use Excel
+
+- You need to perform additional calculations
+- You want to apply custom filters or sorts
+- You're integrating with other Excel-based workflows
+- You need to edit or annotate the data
+
+### When to Use PDF
+
+- You're sharing with external stakeholders
+- You need a printable report
+- You want a fixed, formatted document
+- You're archiving for compliance purposes
+
+### Exporting Frequently
+
+If you process files regularly:
+
+1. Develop a consistent naming convention for saved exports
+2. Create a folder structure for organizing reports
+3. Consider scripting bulk exports if processing many files
+
+<Tip>
+For recurring reports, export to Excel and create a template with pre-formatted charts and analysis. Simply paste new data into the template each time.
+</Tip>
+
+## Related Routes
+
+- `GET /download/excel` - Excel export handler (`app.py:178`)
+- `GET /download/pdf` - PDF export handler (`app.py:206`)
+- `POST /upload` - Generates the data for export (`app.py:124`)
+
+## Next Steps
+
+- [Configure keywords](/guide/configuring-keywords) to refine your exports
+- [View results](/guide/viewing-results) before exporting
+- [Upload new files](/guide/uploading-files) to create more reports

@@ -1,0 +1,264 @@
+---
+title: Installation
+description: Complete guide to installing and setting up the Extrator de Tarefas Auvo application in your local environment.
+---
+
+## Prerequisites
+
+Before installing the application, ensure you have the following installed on your system:
+
+<CardGroup cols={2}>
+  <Card title="Python 3.10+" icon="python">
+    Required for running the Flask application and data processing libraries
+  </Card>
+  
+  <Card title="pip" icon="box">
+    Python package manager for installing dependencies
+  </Card>
+  
+  <Card title="git" icon="github">
+    Version control system for cloning the repository
+  </Card>
+  
+  <Card title="Virtual Environment" icon="layer-group">
+    Recommended for isolating project dependencies
+  </Card>
+</CardGroup>
+
+<Note>
+Python 3.10 or higher is required due to dependencies in the pandas and numpy libraries.
+</Note>
+
+## Installation Steps
+
+<Steps>
+  <Step title="Clone the Repository">
+    First, clone the project repository to your local machine:
+    
+    ```bash
+    git clone <YOUR_REPOSITORY_URL>
+    cd meu_extrator
+    ```
+    
+    <Note>
+    Replace `<YOUR_REPOSITORY_URL>` with your actual Git repository URL.
+    </Note>
+  </Step>
+  
+  <Step title="Create Virtual Environment">
+    Create and activate a Python virtual environment to isolate project dependencies:
+    
+    <CodeGroup>
+    ```bash Windows (Command Prompt)
+    # Create the virtual environment
+    python -m venv venv
+    
+    # Activate the environment
+    .\venv\Scripts\activate
+    ```
+    
+    ```bash Windows (PowerShell)
+    # Create the virtual environment
+    python -m venv venv
+    
+    # Activate the environment
+    .\venv\Scripts\Activate.ps1
+    ```
+    
+    ```bash Linux/macOS
+    # Create the virtual environment
+    python3 -m venv venv
+    
+    # Activate the environment
+    source venv/bin/activate
+    ```
+    </CodeGroup>
+    
+    <Note>
+    When activated, you'll see `(venv)` in your terminal prompt.
+    </Note>
+  </Step>
+  
+  <Step title="Install Dependencies">
+    Install all required Python packages using pip:
+    
+    ```bash
+    pip install -r requirements.txt
+    ```
+    
+    This will install the following key dependencies:
+    
+    | Package | Version | Purpose |
+    |---------|---------|----------|
+    | Flask | 3.1.2 | Web framework |
+    | pandas | 2.3.2 | Data manipulation |
+    | openpyxl | 3.1.5 | Excel file handling |
+    | weasyprint | 66.0 | PDF generation |
+    | python-dotenv | 1.1.1 | Environment variable management |
+    
+    <Warning>
+    The installation may take several minutes as WeasyPrint has multiple dependencies including fonttools, pillow, and rendering libraries.
+    </Warning>
+  </Step>
+  
+  <Step title="Configure Environment Variables">
+    Create a `.env` file in the project root directory to store sensitive configuration:
+    
+    ```bash
+    # Create the .env file
+    touch .env
+    ```
+    
+    Add the following content to the `.env` file:
+    
+    ```bash .env
+    SECRET_KEY='your_secure_secret_key_here'
+    ```
+    
+    To generate a secure secret key, use Python:
+    
+    ```python
+    import secrets
+    print(secrets.token_hex(32))
+    ```
+    
+    Copy the generated key and paste it into your `.env` file.
+    
+    <Warning>
+    Never commit your `.env` file to version control. It should be listed in `.gitignore`.
+    </Warning>
+  </Step>
+  
+  <Step title="Create Temp Directory">
+    The application requires a `temp` directory for storing processed files:
+    
+    <CodeGroup>
+    ```bash Linux/macOS
+    mkdir temp
+    ```
+    
+    ```bash Windows (Command Prompt)
+    mkdir temp
+    ```
+    
+    ```bash Windows (PowerShell)
+    New-Item -ItemType Directory -Name temp
+    ```
+    </CodeGroup>
+    
+    <Note>
+    The application will automatically create this directory if it doesn't exist when you run `app.py`, but creating it manually ensures proper setup.
+    </Note>
+  </Step>
+  
+  <Step title="Verify Installation">
+    Verify that all components are properly installed:
+    
+    ```bash
+    # Check Python version
+    python --version
+    
+    # Verify Flask installation
+    python -c "import flask; print(f'Flask {flask.__version__}')"
+    
+    # Verify pandas installation
+    python -c "import pandas; print(f'Pandas {pandas.__version__}')"
+    
+    # Check if .env file exists
+    ls .env
+    ```
+    
+    All commands should execute without errors.
+  </Step>
+</Steps>
+
+## Directory Structure
+
+After installation, your project structure should look like this:
+
+```
+meu_extrator/
+├── app.py                 # Main Flask application
+├── requirements.txt       # Python dependencies
+├── .env                   # Environment variables (you created this)
+├── temp/                  # Temporary file storage (you created this)
+├── templates/             # HTML templates
+│   ├── index.html
+│   ├── resultado.html
+│   ├── config.html
+│   └── historico.html
+├── static/                # Static assets (CSS, JS, images)
+└── venv/                  # Virtual environment (created by python -m venv)
+```
+
+## Running the Application
+
+Once installation is complete, start the Flask development server:
+
+```bash
+python app.py
+```
+
+You should see output similar to:
+
+```
+ * Serving Flask app 'app'
+ * Debug mode: on
+ * Running on http://127.0.0.1:5000
+ * Press CTRL+C to quit
+```
+
+Open your web browser and navigate to:
+
+```
+http://127.0.0.1:5000
+```
+
+<Note>
+The application runs in debug mode by default, which provides helpful error messages and automatic reloading during development.
+</Note>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="ImportError: No module named 'flask'">
+    This means Flask is not installed. Ensure your virtual environment is activated and run:
+    
+    ```bash
+    pip install -r requirements.txt
+    ```
+  </Accordion>
+  
+  <Accordion title="KeyError: 'SECRET_KEY'">
+    The `.env` file is missing or not properly configured. Create the file with a valid `SECRET_KEY` as described in Step 4.
+  </Accordion>
+  
+  <Accordion title="WeasyPrint installation fails">
+    WeasyPrint requires system libraries for rendering. On Linux, install:
+    
+    ```bash Ubuntu/Debian
+    sudo apt-get install python3-dev python3-pip python3-setuptools python3-wheel python3-cffi libcairo2 libpango-1.0-0 libpangocairo-1.0-0 libgdk-pixbuf2.0-0 libffi-dev shared-mime-info
+    ```
+    
+    On macOS with Homebrew:
+    
+    ```bash macOS
+    brew install cairo pango gdk-pixbuf libffi
+    ```
+  </Accordion>
+  
+  <Accordion title="Permission denied when creating temp directory">
+    Run the mkdir command with appropriate permissions or create the directory manually with:
+    
+    ```bash
+    sudo mkdir temp
+    sudo chmod 755 temp
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<Card title="Quick Start Guide" icon="rocket" href="/quickstart">
+  Learn how to process your first CSV file and generate reports
+</Card>

@@ -1,0 +1,261 @@
+---
+title: 'Processing History'
+description: 'Track the last 10 file processing operations with statistics'
+icon: 'clock-rotate-left'
+---
+
+## Overview
+
+The application maintains a processing history that tracks the last 10 file uploads, storing filenames, timestamps, and key statistics. History is stored in Flask sessions and survives between page refreshes.
+
+## Core Function
+
+History tracking is implemented in the `salvar_historico()` function from `app.py:75`:
+
+```python
+def salvar_historico(filename, stats):
+    """Salva o histórico de processamentos na sessão"""
+    hist = session.get('historico', [])
+    hist.insert(0, {
+        'arquivo': filename,
+        'data': datetime.now().strftime('%d/%m/%Y %H:%M'),
+        'encontrados': stats['filtrados'],
+        'total': stats['total']
+    })
+    session['historico'] = hist[:10]
+```
+
+## How It Works
+
+<Steps>
+  <Step title="Retrieve Existing History">
+    Fetches the current history list from Flask session, defaulting to empty list if none exists:
+    ```python
+    hist = session.get('historico', [])
+    ```
+  </Step>
+  
+  <Step title="Create New Entry">
+    Constructs a dictionary with file metadata and statistics:
+    ```python
+    {
+        'arquivo': filename,
+        'data': datetime.now().strftime('%d/%m/%Y %H:%M'),
+        'encontrados': stats['filtrados'],
+        'total': stats['total']
+    }
+    ```
+  </Step>
+  
+  <Step title="Insert at Beginning">
+    Uses `hist.insert(0, ...)` to add the new entry at the start (most recent first)
+  </Step>
+  
+  <Step title="Limit to 10 Entries">
+    Slices the list to keep only the most recent 10 items:
+    ```python
+    session['historico'] = hist[:10]
+    ```
+  </Step>
+</Steps>
+
+## History Entry Structure
+
+Each history entry contains exactly 4 fields:
+
+```python
+{
+    'arquivo': 'relatorio_auvo_2024.csv',     # Original filename
+    'data': '15/03/2024 14:32',                # Processing timestamp
+    'encontrados': 147,                        # Filtered task count
+    'total': 1523                              # Total records in file
+}
+```
+
+<CardGroup cols={2}>
+  <Card title="arquivo" icon="file">
+    Original uploaded filename (preserved as-is)
+  </Card>
+  <Card title="data" icon="calendar">
+    Brazilian date/time format (DD/MM/YYYY HH:MM)
+  </Card>
+  <Card title="encontrados" icon="check">
+    Number of tasks matching filter keywords
+  </Card>
+  <Card title="total" icon="list">
+    Total records in the uploaded file
+  </Card>
+</CardGroup>
+
+## Integration in Upload Flow
+
+History is saved automatically during file processing in the `/upload` route:
+
+```python
+# From app.py:156
+df_original, resultado_final = processar_arquivo(file, palavras_chave)
+stats = gerar_estatisticas(df_original, resultado_final, palavras_chave)
+
+# ... other processing ...
+
+salvar_historico(file.filename, stats)  # History saved here
+```
+
+<Note>
+  History is saved **after** successful processing but **before** rendering results. This ensures only successfully processed files appear in history.
+</Note>
+
+## Viewing History
+
+The history is accessible via the `/historico` route:
+
+```python
+# From app.py:118
+@app.route('/historico')
+def historico():
+    hist = session.get('historico', [])
+    return render_template('historico.html', historico=hist)
+```
+
+### Template Integration
+
+The history list is passed to `historico.html` as the `historico` variable, which can iterate over entries:
+
+```html
+<!-- Example template usage -->
+{% for entry in historico %}
+  <div class="history-item">
+    <strong>{{ entry.arquivo }}</strong><br>
+    Processado em: {{ entry.data }}<br>
+    Encontrados: {{ entry.encontrados }} de {{ entry.total }}
+  </div>
+{% endfor %}
+```
+
+## Storage Mechanism
+
+<Accordion title="Flask Session Storage Details">
+  - **Backend**: Flask's session system (signed cookies by default)
+  - **Encryption**: Signed with `SECRET_KEY` from environment variables
+  - **Persistence**: Survives page refreshes and navigation
+  - **Lifetime**: Expires when browser closes (unless `SESSION_PERMANENT` is set)
+  - **Size limit**: Typically 4KB for cookie-based sessions
+  - **Security**: Not visible/modifiable by clients without the secret key
+</Accordion>
+
+## Date Formatting
+
+Timestamps use Brazilian Portuguese format:
+
+```python
+datetime.now().strftime('%d/%m/%Y %H:%M')
+```
+
+| Code | Meaning | Example |
+|------|---------|--------|
+| %d | Day (zero-padded) | 09 |
+| %m | Month (zero-padded) | 03 |
+| %Y | 4-digit year | 2024 |
+| %H | Hour (24-hour, zero-padded) | 14 |
+| %M | Minute (zero-padded) | 32 |
+
+**Output**: `09/03/2024 14:32`
+
+## FIFO Queue Behavior
+
+<Warning>
+  The history operates as a FIFO (First In, First Out) queue limited to 10 entries. When an 11th file is processed, the oldest entry is automatically removed.
+</Warning>
+
+### Example Sequence
+
+```python
+# Initial state: 10 items
+history = [file10, file9, file8, ..., file1]
+
+# After processing file11:
+history = [file11, file10, file9, ..., file2]  # file1 is dropped
+```
+
+## Statistics Extraction
+
+Only two statistics are stored from the full stats dictionary:
+
+```python
+'encontrados': stats['filtrados'],  # Filtered count
+'total': stats['total']             # Total count
+```
+
+<Note>
+  The percentage (`percentual`) and per-keyword breakdown (`por_palavra`) are **not** stored in history to minimize session size. These can be recalculated from `encontrados` and `total` if needed.
+</Note>
+
+## Use Cases
+
+<CardGroup cols={2}>
+  <Card title="Audit Trail" icon="list-check">
+    Track which files have been processed and when
+  </Card>
+  <Card title="Quick Reference" icon="eye">
+    See statistics from previous runs without reprocessing
+  </Card>
+  <Card title="Pattern Detection" icon="chart-line">
+    Identify trends in task occurrence rates over time
+  </Card>
+  <Card title="Duplicate Prevention" icon="ban">
+    Spot if the same file is being uploaded multiple times
+  </Card>
+</CardGroup>
+
+## Limitations
+
+<Warning>
+  - History is **per-browser session** (not shared across users or devices)
+  - History is **cleared** when the browser session ends
+  - **No database persistence** - history doesn't survive server restarts
+  - Limited to **10 entries** maximum
+  - No way to delete individual entries (only cleared by session expiration)
+</Warning>
+
+## Edge Cases
+
+### Empty History
+
+If no files have been processed:
+
+```python
+hist = session.get('historico', [])  # Returns []
+```
+
+The template should handle empty lists gracefully:
+
+```html
+{% if historico %}
+  <!-- Show history -->
+{% else %}
+  <p>Nenhum arquivo processado ainda.</p>
+{% endif %}
+```
+
+### Identical Filenames
+
+If the same filename is uploaded multiple times, each processing creates a separate history entry:
+
+```python
+[
+  {'arquivo': 'relatorio.csv', 'data': '15/03/2024 15:00', ...},
+  {'arquivo': 'relatorio.csv', 'data': '15/03/2024 14:30', ...},
+  {'arquivo': 'relatorio.csv', 'data': '15/03/2024 14:00', ...}
+]
+```
+
+## Future Enhancements
+
+Potential improvements to the history system:
+
+- Database persistence for permanent history
+- User-specific history with authentication
+- Ability to re-run previous processing with same keywords
+- Export history to CSV/JSON
+- Detailed statistics including per-keyword breakdown
+- Filtering/searching within history

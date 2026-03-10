@@ -1,0 +1,353 @@
+---
+title: 'Configuration'
+description: 'Environment variables, session management, and custom keyword configuration'
+icon: 'gear'
+---
+
+## Environment Variables
+
+The application uses **python-dotenv** to load configuration from a `.env` file.
+
+### SECRET_KEY
+
+<ParamField path="SECRET_KEY" type="string" required>
+  Flask session encryption key. Must be cryptographically secure.
+  
+  **Usage:** Used by Flask to sign session cookies and prevent tampering.
+  
+  **Location:** `.env` file in the application root
+  
+  **Security:** Should never be committed to version control
+</ParamField>
+
+#### Implementation
+
+```python
+from dotenv import load_dotenv
+import os
+
+load_dotenv()
+app.secret_key = os.getenv('SECRET_KEY')
+```
+
+Reference: `app.py:11-15`
+
+#### Generating a Secure Key
+
+Use Python's `secrets` module to generate a cryptographically secure key:
+
+```python
+import secrets
+print(secrets.token_hex(32))
+```
+
+<Info>
+The recommended key length is 32 bytes (64 hex characters) for production environments.
+</Info>
+
+### .env File Example
+
+```bash
+# Flask secret key for session encryption
+SECRET_KEY='a1b2c3d4e5f6789012345abcdef67890123456789abcdef01234567890abcdef'
+```
+
+## Session Management
+
+Flask sessions store temporary data between requests. The application uses server-side sessions signed with SECRET_KEY.
+
+### Session Storage Structure
+
+<ResponseField name="custom_keywords" type="list[string]">
+  User-configured keywords for filtering tasks
+  
+  **Default:** `['solicitar peça', 'quebrado', 'quebrada', 'quebrados', 'orçamento', 'danificada', 'danificado', 'danificados', 'danificadas', 'trocar cabo', 'soldar', 'trocar', 'instalar', 'orçamento']`
+  
+  **Persistence:** Stored in session until browser is closed or session expires
+</ResponseField>
+
+<ResponseField name="temp_filename" type="string">
+  Unique filename for temporarily stored processing results
+  
+  **Format:** UUID hex string + `.csv` extension
+  
+  **Example:** `"a1b2c3d4e5f67890.csv"`
+  
+  **Purpose:** References the temporary file containing filtered results
+</ResponseField>
+
+<ResponseField name="last_stats" type="object">
+  Statistics from the most recent file processing
+  
+  **Structure:**
+  ```python
+  {
+      'total': 150,              # Total records in file
+      'filtrados': 23,           # Matching records found
+      'percentual': 15.3,        # Percentage (filtrados/total * 100)
+      'por_palavra': {           # Breakdown by keyword
+          'quebrado': 10,
+          'trocar': 8,
+          'soldar': 5
+      }
+  }
+  ```
+</ResponseField>
+
+<ResponseField name="historico" type="list[object]">
+  History of processed files (last 10 entries)
+  
+  **Structure:**
+  ```python
+  [
+      {
+          'arquivo': 'relatorio_marco.csv',
+          'data': '10/03/2026 14:30',
+          'encontrados': 23,
+          'total': 150
+      },
+      ...
+  ]
+  ```
+  
+  **Max Size:** Limited to 10 most recent entries
+</ResponseField>
+
+### Session Implementation
+
+```python
+from flask import session
+
+# Storing data
+session['custom_keywords'] = ['keyword1', 'keyword2']
+session['temp_filename'] = 'a1b2c3d4.csv'
+
+# Retrieving data with defaults
+keywords = session.get('custom_keywords', ['default', 'keywords'])
+filename = session.get('temp_filename')
+```
+
+Reference: `app.py:112, 137, 152, 155`
+
+## Custom Keyword Configuration
+
+### Default Keywords
+
+The application ships with predefined keywords for common maintenance scenarios:
+
+```python
+DEFAULT_KEYWORDS = [
+    'solicitar peça',
+    'quebrado',
+    'quebrada', 
+    'quebrados',
+    'orçamento',
+    'danificada',
+    'danificado',
+    'danificados',
+    'danificadas',
+    'trocar cabo',
+    'soldar',
+    'trocar',
+    'instalar',
+    'orçamento'  # Note: appears twice in source
+]
+```
+
+Reference: `app.py:115`
+
+### Configuration Route
+
+**Endpoint:** `/config`  
+**Methods:** `GET`, `POST`  
+**Template:** `config.html`
+
+#### GET Request
+
+Displays current keywords for editing:
+
+```python
+@app.route('/config', methods=['GET', 'POST'])
+def config():
+    current_keywords = session.get('custom_keywords', DEFAULT_KEYWORDS)
+    return render_template('config.html', 
+                         keywords=', '.join(current_keywords))
+```
+
+Reference: `app.py:108-116`
+
+#### POST Request
+
+Updates keywords from form submission:
+
+```python
+if request.method == 'POST':
+    keywords = request.form.get('keywords', '').split(',')
+    session['custom_keywords'] = [k.strip() for k in keywords if k.strip()]
+    return redirect(url_for('index'))
+```
+
+Reference: `app.py:110-113`
+
+<ParamField body="keywords" type="string" required>
+  Comma-separated list of keywords
+  
+  **Processing:**
+  1. Split by comma
+  2. Strip whitespace from each keyword
+  3. Filter out empty strings
+  4. Store in session
+  
+  **Example:** `"quebrado, trocar peça, soldar, orçamento"`
+</ParamField>
+
+### Keyword Usage in Filtering
+
+Keywords are combined into a regex pattern:
+
+```python
+palavras_chave = session.get('custom_keywords', DEFAULT_KEYWORDS)
+regex_busca = '|'.join(palavras_chave)
+
+# Example result: "quebrado|trocar peça|soldar"
+```
+
+Reference: `app.py:137, 47`
+
+<Info>
+Keywords are used with the regex OR operator (`|`), so any single match will include the record in results.
+</Info>
+
+## Temporary File Storage
+
+### Configuration
+
+```python
+TEMP_FOLDER = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'temp')
+if not os.path.exists(TEMP_FOLDER):
+    os.makedirs(TEMP_FOLDER)
+```
+
+Reference: `app.py:19-21`
+
+<ParamField path="TEMP_FOLDER" type="string" default="./temp">
+  Directory for storing temporary processing results
+  
+  **Location:** `temp/` subdirectory relative to `app.py`
+  
+  **Auto-creation:** Created automatically if it doesn't exist on app startup
+  
+  **Permissions:** Should be writable by the Flask process
+</ParamField>
+
+### File Naming Strategy
+
+```python
+import uuid
+
+temp_filename = f"{uuid.uuid4().hex}.csv"
+file_path = os.path.join(TEMP_FOLDER, temp_filename)
+```
+
+Reference: `app.py:145-146`
+
+<ResponseField name="temp_filename" type="string">
+  UUID-based filename ensures uniqueness and prevents collisions
+  
+  **Format:** `{32-char-hex-uuid}.csv`
+  
+  **Example:** `"a1b2c3d4e5f67890a1b2c3d4e5f67890.csv"`
+  
+  **Security:** Random filenames prevent guessing/enumeration attacks
+</ResponseField>
+
+### File Lifecycle
+
+1. **Creation:** When a file is processed via `/upload`
+2. **Storage:** Filtered results saved as CSV in `TEMP_FOLDER`
+3. **Reference:** Filename stored in `session['temp_filename']`
+4. **Retrieval:** Read from disk for Excel/PDF export
+5. **Expiration:** Implicitly cleared when session expires
+
+<Warning>
+**Manual Cleanup Required**
+
+Temporary files are NOT automatically deleted. Implement periodic cleanup or use a task scheduler to remove old files from the `temp/` directory.
+</Warning>
+
+### Reading Temporary Files
+
+```python
+def get_dataframe_from_temp_file():
+    """Pega o nome do arquivo da sessão e o lê como um DataFrame."""
+    temp_filename = session.get('temp_filename')
+    if not temp_filename:
+        return None
+    
+    file_path = os.path.join(TEMP_FOLDER, temp_filename)
+    
+    if os.path.exists(file_path):
+        return pd.read_csv(file_path)
+    return None
+```
+
+Reference: `app.py:87-98`
+
+## History Management
+
+### History Storage
+
+```python
+def salvar_historico(filename, stats):
+    """Salva o histórico de processamentos na sessão"""
+    hist = session.get('historico', [])
+    hist.insert(0, {
+        'arquivo': filename,
+        'data': datetime.now().strftime('%d/%m/%Y %H:%M'),
+        'encontrados': stats['filtrados'],
+        'total': stats['total']
+    })
+    session['historico'] = hist[:10]  # Keep only last 10
+```
+
+Reference: `app.py:75-84`
+
+<Info>
+**History Limit:** Only the 10 most recent processing operations are retained using list slicing `[:10]`.
+</Info>
+
+### History Route
+
+**Endpoint:** `/historico`  
+**Methods:** `GET`  
+**Template:** `historico.html`
+
+```python
+@app.route('/historico')
+def historico():
+    hist = session.get('historico', [])
+    return render_template('historico.html', historico=hist)
+```
+
+Reference: `app.py:118-121`
+
+## Configuration Best Practices
+
+<Card title="Security" icon="shield">
+  - Never commit `.env` to version control
+  - Use a strong, random SECRET_KEY in production
+  - Rotate SECRET_KEY periodically
+  - Ensure `temp/` directory has appropriate permissions
+</Card>
+
+<Card title="Performance" icon="gauge">
+  - Implement cleanup for old temp files
+  - Consider using Redis for session storage in production
+  - Monitor temp folder disk usage
+</Card>
+
+<Card title="Customization" icon="palette">
+  - Keywords can be changed per-session via `/config`
+  - Default keywords are Portuguese maintenance terms
+  - Regex special characters in keywords should be escaped if literal matching is needed
+</Card>

@@ -1,0 +1,245 @@
+---
+title: 'Configuring Keywords'
+description: 'Customize search keywords to find specific tasks in your Auvo reports'
+icon: 'gear'
+---
+
+## Overview
+
+Keywords are the search terms used to identify tasks that require action in the "Relato" (report) column of your Auvo files. By customizing these keywords, you can tailor the extraction to your specific business needs.
+
+## Default Keywords
+
+The application comes with a default set of keywords commonly used to identify tasks requiring action:
+
+- solicitar peça
+- quebrado
+- quebrada
+- quebrados
+- orçamento
+- danificada
+- danificado
+- danificados
+- danificadas
+- trocar cabo
+- soldar
+- trocar
+- instalar
+
+<Info>
+Keywords are case-insensitive, meaning "QUEBRADO", "quebrado", and "Quebrado" will all match.
+</Info>
+
+## Accessing the Configuration Page
+
+<Steps>
+  <Step title="Navigate to Configuration">
+    From the home page, click the **"Configurar Palavras-chave"** button. This will take you to the `/config` route.
+    
+    ![Configuration button on the home page]
+  </Step>
+
+  <Step title="View Current Keywords">
+    The configuration page displays your current keywords in a large text area, separated by commas.
+    
+    ![Configuration page showing keyword textarea]
+  </Step>
+</Steps>
+
+## How to Modify Keywords
+
+<Steps>
+  <Step title="Edit the Keyword List">
+    In the text area, modify your keywords. Each keyword should be separated by a comma.
+    
+    ```
+    solicitar peça, quebrado, vazamento, sem comunicação, ajustar
+    ```
+  </Step>
+
+  <Step title="Use Suggested Keywords">
+    The configuration page provides quick-add badges for common keywords:
+    
+    - vazamento
+    - rompido
+    - sem comunicação
+    - ajustar
+    - conector
+    
+    <Tip>
+    Click on any suggested keyword badge to add it to your list automatically (requires JavaScript).
+    </Tip>
+  </Step>
+
+  <Step title="Save Changes">
+    Click the **"Salvar Alterações"** button to save your keywords. You'll be redirected back to the home page.
+  </Step>
+
+  <Step title="Process Files with New Keywords">
+    Your new keywords will be used for all subsequent file uploads. Previously processed files are not automatically re-analyzed.
+  </Step>
+</Steps>
+
+## Keyword Configuration Details
+
+### How Keywords Are Stored
+
+Keywords are stored in your browser's session storage (handled by Flask sessions). This means:
+
+- Keywords persist across page navigation during your session
+- Keywords are browser-specific (not shared between devices)
+- Keywords reset if you clear your browser cookies/session
+- Each user can have different keyword configurations
+
+<Note>
+Your keyword configuration is stored server-side in the session but tied to your browser session cookie. If you close your browser or the session expires, keywords may revert to defaults.
+</Note>
+
+### Backend Processing
+
+When you save keywords (via `POST /config` in `app.py:108`):
+
+1. The form data is received as a comma-separated string
+2. The string is split by commas: `request.form.get('keywords', '').split(',')`
+3. Each keyword is trimmed of whitespace: `[k.strip() for k in keywords]`
+4. Empty keywords are filtered out
+5. The cleaned list is stored in the session: `session['custom_keywords']`
+
+### How Keywords Are Applied
+
+During file processing (`app.py:137`):
+
+1. Keywords are retrieved from the session
+2. A regex pattern is built: `regex_busca = '|'.join(palavras_chave)`
+3. The pattern searches the "Relato" column using pandas:
+   ```python
+   df[df['Relato'].astype(str).str.contains(regex_busca, case=False, na=False)]
+   ```
+4. All matching rows are included in the results
+
+<Info>
+Keywords use regex "OR" logic (separated by `|`), meaning a row matches if it contains ANY of the configured keywords.
+</Info>
+
+## Best Practices for Keywords
+
+### Use Specific Terms
+
+Choose keywords that specifically indicate action is needed:
+
+✅ **Good**: "solicitar peça", "quebrado", "orçamento necessário"
+
+❌ **Avoid**: "cliente", "instalação" (too generic)
+
+### Include Variations
+
+Include singular, plural, and gender variations for Portuguese:
+
+```
+quebrado, quebrada, quebrados, quebradas
+danificado, danificada, danificados, danificadas
+```
+
+### Use Multi-Word Phrases
+
+You can use phrases with spaces:
+
+```
+solicitar peça, trocar cabo, sem comunicação, pedir orçamento
+```
+
+<Tip>
+Phrases must match exactly (case-insensitive). "solicitar peça" will match "Solicitar Peça" but not "solicitar uma peça".
+</Tip>
+
+### Consider Your Business Context
+
+Tailor keywords to your specific industry and service types:
+
+**For HVAC services:**
+```
+vazamento, sem refrigeração, gás, compressor
+```
+
+**For network/telecom:**
+```
+sem sinal, cabeamento, rompido, instalar ponto
+```
+
+**For electrical:**
+```
+disjuntor, curto-circuito, sem energia, trocar fiação
+```
+
+## Testing Your Keywords
+
+<Steps>
+  <Step title="Configure Keywords">
+    Set up your desired keyword list in the configuration page.
+  </Step>
+
+  <Step title="Process a Sample File">
+    Upload a representative Auvo file to test your keywords.
+  </Step>
+
+  <Step title="Review Statistics">
+    On the results page, check the "Ocorrências por Palavra-chave" section to see which keywords found matches.
+    
+    ![Statistics showing keyword match counts]
+  </Step>
+
+  <Step title="Refine as Needed">
+    If too many or too few results are found, return to the configuration page and adjust your keywords.
+  </Step>
+</Steps>
+
+## Viewing Active Keywords
+
+After processing a file, the results page displays:
+
+- **Total keywords used**: Shown in the "Palavras Ativas" statistics card
+- **Keywords with matches**: Listed in the "Ocorrências por Palavra-chave" section with match counts
+- **Full keyword list**: Displayed at the bottom of the results page with an edit button
+
+<Info>
+Only keywords that found at least one match appear in the "Ocorrências por Palavra-chave" breakdown.
+</Info>
+
+## Troubleshooting
+
+### No Results Found
+
+If your processed file returns zero results:
+
+1. Verify your keywords match the actual terms in the "Relato" column
+2. Check for typos in your keyword configuration
+3. Remember that keywords are matched against complete words/phrases
+4. Consider adding variations or broader terms
+
+### Too Many Results
+
+If you're getting irrelevant matches:
+
+1. Use more specific keywords or phrases
+2. Remove overly broad terms
+3. Consider the context in which keywords appear in your reports
+
+### Keywords Not Saving
+
+If your keywords aren't persisting:
+
+1. Ensure cookies are enabled in your browser
+2. Check that you're clicking "Salvar Alterações" before leaving the page
+3. Verify the Flask secret key is configured (required for sessions)
+
+## Related Routes
+
+- `GET /config` - Display configuration form (`app.py:108`)
+- `POST /config` - Save keyword configuration (`app.py:110`)
+- `POST /upload` - Uses configured keywords to process files (`app.py:124`)
+
+## Next Steps
+
+- [Upload files](/guide/uploading-files) to test your keywords
+- [View results](/guide/viewing-results) to see keyword statistics
+- [Export reports](/guide/exporting-reports) with keyword information included

@@ -1,0 +1,281 @@
+---
+title: 'Export Formats'
+description: 'Excel and PDF export capabilities with embedded statistics and formatting'
+icon: 'file-export'
+---
+
+## Overview
+
+The application supports two export formats: Excel (.xlsx) and PDF. Both include filtered task data, statistics, and metadata about the processing.
+
+## Excel Export
+
+Excel exports create multi-sheet workbooks with separate tabs for tasks and statistics.
+
+### Implementation
+
+The Excel export is handled by the `/download/excel` route in `app.py:178`:
+
+```python
+@app.route('/download/excel')
+def download_excel():
+    df = get_dataframe_from_temp_file() 
+    if df is None:
+        return redirect(url_for('index', 
+            error="Os resultados expiraram. Por favor, processe o arquivo novamente."))
+    
+    stats = session.get('last_stats', {})
+    
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        df.to_excel(writer, index=False, sheet_name='Tarefas Encontradas')
+        stats_df = pd.DataFrame([
+            ['Total de Registros', stats.get('total', 'N/A')],
+            ['Tarefas Encontradas', stats.get('filtrados', 'N/A')],
+            ['Taxa de Ocorrência (%)', stats.get('percentual', 'N/A')],
+            ['Data de Geração', datetime.now().strftime('%d/%m/%Y %H:%M')]
+        ], columns=['Métrica', 'Valor'])
+        stats_df.to_excel(writer, index=False, sheet_name='Estatísticas')
+    
+    output.seek(0)
+    
+    return Response(
+        output,
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheet.sheet",
+        headers={"Content-Disposition": "attachment;filename=relatorio_filtrado.xlsx"}
+    )
+```
+
+### Excel Structure
+
+<CardGroup cols={2}>
+  <Card title="Sheet 1: Tarefas Encontradas" icon="table">
+    Contains all filtered task records with 5 columns:
+    - Data (Date)
+    - Cliente (Client)
+    - Endereco (Address)
+    - OS Digital (Work Order)
+    - Relato (Report)
+  </Card>
+  <Card title="Sheet 2: Estatísticas" icon="chart-line">
+    Statistics summary with 4 metrics:
+    - Total de Registros
+    - Tarefas Encontradas
+    - Taxa de Ocorrência (%)
+    - Data de Geração (timestamp)
+  </Card>
+</CardGroup>
+
+### Technical Details
+
+<Accordion title="Excel Engine and Libraries">
+  - **Engine**: openpyxl (specified in `pd.ExcelWriter`)
+  - **Format**: XLSX (Office Open XML)
+  - **MIME type**: `application/vnd.openxmlformats-officedocument.spreadsheet.sheet`
+  - **Memory handling**: Uses `io.BytesIO()` for in-memory file generation
+  - **Filename**: Fixed as `relatorio_filtrado.xlsx`
+</Accordion>
+
+<Note>
+  The Excel export reads filtered data from a temporary CSV file stored in the `temp/` folder, not directly from the session. This prevents session size limits.
+</Note>
+
+## PDF Export
+
+PDF exports create formatted, print-ready reports with embedded styling and clickable hyperlinks.
+
+### Implementation
+
+The PDF export is handled by the `/download/pdf` route in `app.py:206`:
+
+```python
+@app.route('/download/pdf')
+def download_pdf():
+    df = get_dataframe_from_temp_file()
+    if df is None:
+        return redirect(url_for('index', 
+            error="Os resultados expiraram. Por favor, processe o arquivo novamente."))
+    
+    stats = session.get('last_stats', {})
+    palavras_utilizadas = session.get('custom_keywords', [])
+    
+    df_render = df.copy()
+    if not df.empty:
+        df_render['OS Digital'] = df_render['OS Digital'].apply(criar_links)
+
+    tabela_html = df_render.to_html(
+        index=False, escape=False, classes="tabela-pdf"
+    ) if not df.empty else "<p>Nenhuma tarefa encontrada.</p>"
+    
+    full_html = f"""
+    <html>
+      <head>
+        <meta charset="utf-8">
+        <style>
+          body {{ font-family: Arial, sans-serif; margin: 20px; color: #333; }}
+          h1 {{ color: #0056b3; }}
+          .header {{ padding: 20px; margin-bottom: 20px; border-radius: 5px; 
+                     background-color: #f8f9fa; }}
+          .stats {{ display: flex; justify-content: space-around; margin: 20px 0; 
+                    background-color: #e9ecef; padding: 15px; border-radius: 5px; }}
+          .stat-box {{ text-align: center; }}
+          .stat-number {{ font-size: 24px; font-weight: bold; color: #007bff; }}
+          .palavras-chave {{ background-color: #fff3cd; padding: 15px; 
+                             margin: 20px 0; border-radius: 5px; 
+                             border-left: 4px solid #ffc107; }}
+          .tabela-pdf {{ border-collapse: collapse; width: 100%; font-size: 10px; }}
+          .tabela-pdf th, .tabela-pdf td {{ text-align: left; padding: 6px; 
+                                             border: 1px solid #ddd; }}
+          .tabela-pdf th {{ background-color: #f2f2f2; }}
+          a {{ color: #007bff; text-decoration: none; }}
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <h1>Relatório de Tarefas com Ação Necessária</h1>
+          <p><strong>Gerado em:</strong> {datetime.now().strftime('%d/%m/%Y às %H:%M')}</p>
+        </div>
+        <div class="stats">
+          <div class="stat-box">
+            <div class="stat-number">{stats.get('total', 'N/A')}</div>
+            <div>Total de Registros</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-number">{stats.get('filtrados', 'N/A')}</div>
+            <div>Tarefas Encontradas</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-number">{stats.get('percentual', 'N/A')}%</div>
+            <div>Taxa de Ocorrência</div>
+          </div>
+        </div>
+        <div class="palavras-chave">
+          <h3>Palavras-chave utilizadas:</h3>
+          <p>{', '.join(palavras_utilizadas)}</p>
+        </div>
+        {tabela_html}
+      </body>
+    </html>
+    """
+    
+    pdf = HTML(string=full_html).write_pdf()
+
+    return Response(
+        pdf,
+        mimetype="application/pdf",
+        headers={"Content-Disposition": "attachment;filename=relatorio_filtrado.pdf"}
+    )
+```
+
+### PDF Structure
+
+<Steps>
+  <Step title="Header Section">
+    Title and generation timestamp with blue styling
+  </Step>
+  <Step title="Statistics Dashboard">
+    Visual boxes displaying total, filtered, and percentage metrics
+  </Step>
+  <Step title="Keywords Section">
+    Yellow-highlighted box showing all keywords used in filtering
+  </Step>
+  <Step title="Data Table">
+    Formatted table with all filtered tasks and clickable OS Digital links
+  </Step>
+</Steps>
+
+### PDF Features
+
+<CardGroup cols={2}>
+  <Card title="Clickable Links" icon="link">
+    OS Digital URLs are converted to HTML links using `criar_links()` function
+  </Card>
+  <Card title="Custom Styling" icon="palette">
+    Inline CSS with Bootstrap-inspired colors and responsive layout
+  </Card>
+  <Card title="UTF-8 Support" icon="language">
+    Proper encoding for Portuguese characters (ç, ã, õ, etc.)
+  </Card>
+  <Card title="Print-Ready" icon="print">
+    Optimized font sizes (10px for table) and page margins
+  </Card>
+</CardGroup>
+
+### Link Creation
+
+The `criar_links()` helper function (from `app.py:26`) converts URLs to clickable HTML:
+
+```python
+def criar_links(url):
+    """Transforma URLs em links HTML clicáveis"""
+    if isinstance(url, str) and url.startswith('http'):
+        return f'<a href="{url}" target="_blank">{url}</a>'
+    return url
+```
+
+## Temporary File Management
+
+Both export routes use the `get_dataframe_from_temp_file()` function to retrieve filtered data:
+
+```python
+def get_dataframe_from_temp_file():
+    """Pega o nome do arquivo da sessão e o lê como um DataFrame."""
+    temp_filename = session.get('temp_filename')
+    if not temp_filename:
+        return None
+    
+    file_path = os.path.join(TEMP_FOLDER, temp_filename)
+    
+    if os.path.exists(file_path):
+        return pd.read_csv(file_path)
+    return None
+```
+
+<Warning>
+  If the temporary file is deleted or the session expires, the export will fail with an error message: "Os resultados expiraram. Por favor, processe o arquivo novamente."
+</Warning>
+
+## Comparison Table
+
+| Feature | Excel | PDF |
+|---------|-------|-----|
+| Multiple sheets | Yes (2 sheets) | No |
+| Editable | Yes | No |
+| Clickable links | No | Yes |
+| Visual styling | Basic | Rich HTML/CSS |
+| File size | Smaller | Larger |
+| Keywords shown | No | Yes |
+| Generation library | openpyxl | weasyprint |
+| Best for | Data analysis | Sharing/printing |
+
+## Response Headers
+
+Both exports use Flask's `Response` object with proper MIME types:
+
+<Tabs>
+  <Tab title="Excel">
+    ```python
+    mimetype="application/vnd.openxmlformats-officedocument.spreadsheet.sheet"
+    headers={"Content-Disposition": "attachment;filename=relatorio_filtrado.xlsx"}
+    ```
+  </Tab>
+  <Tab title="PDF">
+    ```python
+    mimetype="application/pdf"
+    headers={"Content-Disposition": "attachment;filename=relatorio_filtrado.pdf"}
+    ```
+  </Tab>
+</Tabs>
+
+<Note>
+  The `Content-Disposition: attachment` header forces the browser to download the file rather than display it inline.
+</Note>
+
+## Error Handling
+
+Both routes handle missing data gracefully:
+
+1. Check if temporary file exists
+2. Redirect to index with error message if not found
+3. Use `.get()` with default values for stats (prevents KeyError)
+4. Handle empty DataFrames with conditional rendering

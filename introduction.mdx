@@ -1,0 +1,121 @@
+---
+title: Introduction
+description: Learn about the Extrator de Tarefas Auvo project, a web application for processing and filtering task reports from the Auvo system.
+---
+
+## What is Extrator de Tarefas Auvo?
+
+Extrator de Tarefas Auvo is a Flask-based web application designed to streamline the analysis of task reports exported from the Auvo system. It automatically filters tasks based on configurable keywords and provides organized results with statistics and export capabilities.
+
+<Note>
+This tool is specifically designed to work with CSV and Excel files exported from the Auvo task management system.
+</Note>
+
+## Key Features
+
+The application provides a comprehensive set of features for task analysis:
+
+<CardGroup cols={2}>
+  <Card title="File Upload" icon="upload">
+    Upload task reports in CSV, XLS, or XLSX formats directly through the web interface.
+  </Card>
+  
+  <Card title="Keyword Filtering" icon="filter">
+    Filter tasks using customizable keywords like "quebrado" (broken), "trocar peça" (replace part), and more.
+  </Card>
+  
+  <Card title="Interactive Visualization" icon="table">
+    View filtered results in an interactive table with dynamic search capabilities.
+  </Card>
+  
+  <Card title="Statistics Dashboard" icon="chart-bar">
+    Get instant insights including total records, tasks found, and occurrence rates.
+  </Card>
+  
+  <Card title="Export Options" icon="download">
+    Download filtered results in Excel (.xlsx) or PDF formats for reporting.
+  </Card>
+  
+  <Card title="Processing History" icon="clock-rotate-left">
+    Track the last 10 processed files during your session with detailed statistics.
+  </Card>
+</CardGroup>
+
+## Who Is This For?
+
+This application is ideal for:
+
+- **Field Service Managers**: Quickly identify tasks requiring parts replacement, repairs, or follow-up actions
+- **Operations Teams**: Monitor task patterns and filter reports for specific issue types
+- **Maintenance Coordinators**: Track tasks involving equipment failures or service requests
+- **Auvo Users**: Anyone working with Auvo task exports who needs efficient filtering and reporting
+
+## How It Works
+
+The application follows a simple workflow:
+
+<Steps>
+  <Step title="Upload Report">
+    Upload your CSV or Excel file exported from Auvo (the application automatically skips the first 5 header rows)
+  </Step>
+  
+  <Step title="Process & Filter">
+    The system filters tasks based on keywords in the "Relato" (Report) column
+  </Step>
+  
+  <Step title="View Results">
+    Review filtered tasks in an organized table showing Date, Client, Address, Digital OS, and Report
+  </Step>
+  
+  <Step title="Export Data">
+    Download results as Excel spreadsheets with statistics or formatted PDF reports
+  </Step>
+</Steps>
+
+## Technology Stack
+
+The application is built with modern, reliable technologies:
+
+- **Backend**: Python 3.10+ with Flask web framework
+- **Data Processing**: Pandas for efficient CSV/Excel manipulation
+- **PDF Generation**: WeasyPrint for professional report formatting
+- **Frontend**: HTML5, CSS3, Bootstrap 5, and JavaScript for responsive UI
+- **Session Management**: Flask sessions for maintaining user state
+
+## Default Keywords
+
+The application comes pre-configured with Portuguese keywords commonly found in maintenance and service tasks:
+
+```python
+[
+  'solicitar peça',    # request part
+  'quebrado',          # broken (masculine)
+  'quebrada',          # broken (feminine)
+  'quebrados',         # broken (plural masculine)
+  'orçamento',         # budget/quote
+  'danificada',        # damaged (feminine)
+  'danificado',        # damaged (masculine)
+  'danificados',       # damaged (plural masculine)
+  'danificadas',       # damaged (plural feminine)
+  'trocar cabo',       # replace cable
+  'soldar',            # solder
+  'trocar',            # replace
+  'instalar'           # install
+]
+```
+
+<Note>
+You can customize these keywords through the application's configuration page to match your specific filtering needs.
+</Note>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Installation" icon="download" href="/installation">
+    Set up the application in your local environment
+  </Card>
+  
+  <Card title="Quick Start" icon="rocket" href="/quickstart">
+    Process your first file in minutes
+  </Card>
+</CardGroup>
